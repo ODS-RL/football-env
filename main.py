@@ -22,6 +22,7 @@ from agents.random_agent import (
     StrikerAgent, DefenderAgent, InterceptorAgent,
     MidfielderAgent, AggressorAgent, WingerAgent,
 )
+from agents.keyboard_agent import KeyboardAgent, KeyboardController
 from game_logging.logger import GameLogger
 
 # Mapping from agent type names to classes
@@ -202,6 +203,7 @@ def run_game(
     visualize: bool = True,
     log_path: Optional[str] = None,
     save_log: bool = True,
+    keyboard_controller: Optional[KeyboardController] = None,
 ) -> tuple:
     """
     Run a game with optional visualization and logging.
@@ -220,20 +222,37 @@ def run_game(
     # Create game
     game = Game(config, team0_agents, team1_agents, logger=logger)
 
+    renderer = None
     if visualize:
         try:
             from visualization.renderer import Renderer
+            import pygame
             renderer = Renderer(config, scale=1.0)
         except ImportError:
             print("Warning: pygame not available, running without visualization")
             visualize = False
 
+    # Link keyboard agents to renderer's key state
+    if keyboard_controller and renderer:
+        for agent in keyboard_controller.agents:
+            agent.set_key_state(renderer.pressed_keys)
+        # Set initial active player highlight
+        renderer.set_active_player(0, keyboard_controller.get_active_player_id())
+
     # Run game loop
-    if visualize:
+    if visualize and renderer:
+        import pygame
         running = True
         while running and game.status.value == "running":
             game.step()
             running = renderer.render(game.get_state())
+
+            # Handle Tab key for player switching
+            if keyboard_controller and pygame.K_TAB in renderer.pressed_keys:
+                keyboard_controller.switch_next()
+                renderer.set_active_player(0, keyboard_controller.get_active_player_id())
+                renderer.pressed_keys.discard(pygame.K_TAB)
+
             renderer.tick(config.ticks_per_second)
 
         # Show final state
@@ -334,6 +353,11 @@ Examples:
         default=1.0,
         help="Display scale factor (default: 1.0)",
     )
+    parser.add_argument(
+        "--keyboard",
+        action="store_true",
+        help="Enable keyboard control for team 0 (WASD=move, Space=kick, Tab=switch player)",
+    )
 
     args = parser.parse_args()
 
@@ -354,15 +378,34 @@ Examples:
     )
 
     # Create agents
-    try:
-        team0, team1 = create_agents(config, args.agents)
-    except ValueError as e:
-        print(f"Error: {e}")
-        sys.exit(1)
+    keyboard_controller = None
+    if args.keyboard:
+        if args.no_viz:
+            print("Error: --keyboard requires visualization (cannot use with --no-viz)")
+            sys.exit(1)
+        # Create AI agents for both teams first
+        ai_team0, team1 = create_agents(config, args.agents)
+        # Wrap team 0 AI agents with keyboard control (AI is fallback when not active)
+        keyboard_agents = [
+            KeyboardAgent(0, i, fallback_agent=ai_team0[i])
+            for i in range(config.players_per_team)
+        ]
+        team0: List[BaseAgent] = list(keyboard_agents)
+        keyboard_controller = KeyboardController(keyboard_agents)
+        print(f"Team 0: Keyboard-controlled (AI fallback when not active)")
+    else:
+        try:
+            team0, team1 = create_agents(config, args.agents)
+        except ValueError as e:
+            print(f"Error: {e}")
+            sys.exit(1)
 
     print(f"Starting {args.players}v{args.players} game")
     print(f"Max ticks: {args.ticks}, Win score: {args.win_score}")
-    print(f"Agent type: {args.agents}")
+    if args.keyboard:
+        print("Controls: WASD=move, Space=kick, Tab=switch player")
+    else:
+        print(f"Agent type: {args.agents}")
     print()
 
     # Run game
@@ -373,6 +416,7 @@ Examples:
         visualize=not args.no_viz,
         log_path=args.log,
         save_log=args.save_log,
+        keyboard_controller=keyboard_controller,
     )
 
     print()

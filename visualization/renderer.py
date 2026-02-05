@@ -60,6 +60,11 @@ class Renderer:
         self.font = pygame.font.Font(None, 36)
         self.small_font = pygame.font.Font(None, 24)
 
+        # Keyboard state tracking
+        self.pressed_keys: set = set()
+        self.active_player_id: Optional[int] = None  # For highlighting controlled player
+        self.active_team_id: Optional[int] = None
+
     def _scale_pos(self, x: float, y: float) -> tuple:
         """Scale position to screen coordinates with padding offset."""
         return (int(x * self.scale) + self.padding, int(y * self.scale))
@@ -80,8 +85,11 @@ class Renderer:
             if event.type == pygame.QUIT:
                 return False
             if event.type == pygame.KEYDOWN:
+                self.pressed_keys.add(event.key)
                 if event.key == pygame.K_ESCAPE:
                     return False
+            elif event.type == pygame.KEYUP:
+                self.pressed_keys.discard(event.key)
 
         # Clear screen with background color (for goal areas)
         self.screen.fill(DARK_GREEN)
@@ -195,6 +203,13 @@ class Renderer:
             pos = self._scale_pos(player.x, player.y)
             color = BLUE if player.team_id == 0 else RED
 
+            # Highlight active player (keyboard controlled)
+            if (self.active_player_id is not None and
+                player.player_id == self.active_player_id and
+                player.team_id == self.active_team_id):
+                # Draw outer highlight ring
+                pygame.draw.circle(self.screen, YELLOW, pos, player_radius + 6, 3)
+
             # Player circle
             pygame.draw.circle(self.screen, color, pos, player_radius)
             pygame.draw.circle(self.screen, WHITE, pos, player_radius, 2)
@@ -247,6 +262,11 @@ class Renderer:
     def tick(self, fps: int = 60) -> None:
         """Control frame rate."""
         self.clock.tick(fps)
+
+    def set_active_player(self, team_id: int, player_id: int) -> None:
+        """Set which player should be highlighted as active."""
+        self.active_team_id = team_id
+        self.active_player_id = player_id
 
     def close(self) -> None:
         """Close the renderer."""
