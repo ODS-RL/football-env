@@ -19,6 +19,23 @@ class Action:
         self.ay = float(self.ay)
         self.kick = bool(self.kick)
 
+    def to_dict(self) -> dict:
+        """Serialize action to dictionary for network transmission."""
+        return {
+            'ax': self.ax,
+            'ay': self.ay,
+            'kick': self.kick,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> 'Action':
+        """Create action from dictionary."""
+        return cls(
+            ax=data.get('ax', 0.0),
+            ay=data.get('ay', 0.0),
+            kick=data.get('kick', False),
+        )
+
 
 class BaseAgent(ABC):
     """Base class for AI agents."""
