@@ -15,6 +15,7 @@ from tournament import (
     run_tournament,
     print_leaderboard,
     save_results,
+    get_preset_agent_types,
 )
 
 
@@ -231,12 +232,8 @@ Examples:
                 print(f"Error: Unknown agent type '{at}'")
                 print(f"Valid types: {', '.join(sorted(AGENT_CLASSES.keys()))}")
                 sys.exit(1)
-    elif args.preset == "common":
-        agent_types = ["goalie", "striker", "defender", "midfielder", "messi"]
-    elif args.preset == "competitive":
-        agent_types = ["goalie", "striker", "defender", "messi", "interceptor", "aggressor"]
-    elif args.preset == "all":
-        agent_types = list(AGENT_CLASSES.keys())
+    elif args.preset in {"common", "competitive", "all"}:
+        agent_types = get_preset_agent_types(args.preset)
     else:
         print("Error: Must specify either --agents or --preset")
         sys.exit(1)

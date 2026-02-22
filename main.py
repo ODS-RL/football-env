@@ -52,7 +52,7 @@ def create_agents(config: GameConfig, agent_type: str = "mixed") -> tuple:
     - A single agent type: random, chaser, goalie, striker, defender, interceptor, midfielder, aggressor, winger
     - Comma-separated agent types: goalie,striker,defender,chaser (assigns to players in order, both teams)
 
-    For comma-separated: if fewer agents than needed (2 * players_per_team), fills with default.
+    For comma-separated: if fewer agents than needed (2 * players_per_team), fills randomly.
     Raises ValueError if more agents specified than needed.
     """
     team0_agents: List[BaseAgent] = []
@@ -334,7 +334,7 @@ Examples:
         help="Agent configuration. Can be a preset (mixed, tactical, aggressive, balanced, wings, diverse, randomized) "
              "or comma-separated agent types for each player (e.g., goalie,striker,defender,chaser). "
              "Available agent types: random, chaser, goalie, striker, defender, interceptor, midfielder, aggressor, winger. "
-             "If fewer agents specified than players, remaining use default (chaser). "
+             "If fewer agents are specified than needed (2 * players_per_team), remaining slots are filled randomly. "
              "Error if more agents specified than needed (2 * players_per_team).",
     )
     parser.add_argument(

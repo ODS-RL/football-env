@@ -155,10 +155,10 @@ python main.py --players 2 --agents goalie,striker,goalie,defender
 # Team 0: goalie (player 0), striker (player 1)
 # Team 1: goalie (player 0), defender (player 1)
 
-# Partial specification (remaining players get default 'chaser')
+# Partial specification (remaining players are filled randomly)
 python main.py --players 3 --agents goalie,striker
-# Team 0: goalie, striker, chaser
-# Team 1: chaser, chaser, chaser
+# Team 0: goalie, striker, <random>
+# Team 1: <random>, <random>, <random>
 ```
 
 ## Agent Type Reference

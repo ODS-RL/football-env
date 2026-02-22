@@ -9,7 +9,6 @@ to find optimal strategies and agent combinations.
 import argparse
 import itertools
 import json
-from collections import defaultdict
 from dataclasses import dataclass, asdict
 from typing import List, Dict, Tuple
 import sys
@@ -22,7 +21,10 @@ from agents.random_agent import (
     StrikerAgent, DefenderAgent, InterceptorAgent,
     MidfielderAgent, AggressorAgent, WingerAgent,
 )
-from agents.messi_agent import MessiAgent
+try:
+    from agents.messi_agent import MessiAgent
+except ImportError:
+    MessiAgent = None
 
 
 # Agent class mapping
@@ -36,8 +38,26 @@ AGENT_CLASSES = {
     "midfielder": MidfielderAgent,
     "aggressor": AggressorAgent,
     "winger": WingerAgent,
-    "messi": MessiAgent,
 }
+
+if MessiAgent is not None:
+    AGENT_CLASSES["messi"] = MessiAgent
+
+
+def get_preset_agent_types(preset: str) -> list[str]:
+    """Return agent types for a named preset, filtered by availability."""
+    presets = {
+        "common": ["goalie", "striker", "defender", "midfielder", "messi"],
+        "competitive": ["goalie", "striker", "defender", "messi", "interceptor", "aggressor"],
+        "all": list(AGENT_CLASSES.keys()),
+    }
+    if preset not in presets:
+        raise ValueError(f"Unknown preset: {preset}")
+
+    selected = [agent for agent in presets[preset] if agent in AGENT_CLASSES]
+    if not selected:
+        raise ValueError(f"Preset '{preset}' has no available agent types")
+    return selected
 
 
 @dataclass
@@ -228,23 +248,31 @@ def run_tournament(
                 comp0 = tuple(team0_comp)
                 comp1 = tuple(team1_comp)
 
-                stats[comp0].games_played += 1
-                stats[comp0].goals_scored += result.team0_score
-                stats[comp0].goals_conceded += result.team1_score
-
-                stats[comp1].games_played += 1
-                stats[comp1].goals_scored += result.team1_score
-                stats[comp1].goals_conceded += result.team0_score
-
-                if result.winner == 0:
-                    stats[comp0].wins += 1
-                    stats[comp1].losses += 1
-                elif result.winner == 1:
-                    stats[comp0].losses += 1
-                    stats[comp1].wins += 1
-                else:  # draw
+                if comp0 == comp1:
+                    # Same composition on both sides: count one mirror match.
+                    stats[comp0].games_played += 1
+                    goals_total = result.team0_score + result.team1_score
+                    stats[comp0].goals_scored += goals_total
+                    stats[comp0].goals_conceded += goals_total
                     stats[comp0].draws += 1
-                    stats[comp1].draws += 1
+                else:
+                    stats[comp0].games_played += 1
+                    stats[comp0].goals_scored += result.team0_score
+                    stats[comp0].goals_conceded += result.team1_score
+
+                    stats[comp1].games_played += 1
+                    stats[comp1].goals_scored += result.team1_score
+                    stats[comp1].goals_conceded += result.team0_score
+
+                    if result.winner == 0:
+                        stats[comp0].wins += 1
+                        stats[comp1].losses += 1
+                    elif result.winner == 1:
+                        stats[comp0].losses += 1
+                        stats[comp1].wins += 1
+                    else:  # draw
+                        stats[comp0].draws += 1
+                        stats[comp1].draws += 1
 
     # Calculate final stats
     for team_stats in stats.values():
@@ -399,12 +427,8 @@ Examples:
                 print(f"Error: Unknown agent type '{at}'")
                 print(f"Valid types: {', '.join(sorted(AGENT_CLASSES.keys()))}")
                 sys.exit(1)
-    elif args.preset == "common":
-        agent_types = ["goalie", "striker", "defender", "midfielder", "messi"]
-    elif args.preset == "competitive":
-        agent_types = ["goalie", "striker", "defender", "messi", "interceptor", "aggressor"]
-    elif args.preset == "all":
-        agent_types = list(AGENT_CLASSES.keys())
+    elif args.preset in {"common", "competitive", "all"}:
+        agent_types = get_preset_agent_types(args.preset)
     else:
         print("Error: Must specify either --agents or --preset")
         sys.exit(1)

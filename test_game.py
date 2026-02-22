@@ -329,6 +329,27 @@ def test_game_engine():
     print(f"  Ball position: ({state.ball.x:.1f}, {state.ball.y:.1f})")
 
 
+def test_game_step_handles_agent_timeouts():
+    """Test that slow agents don't crash the game loop on timeout."""
+    print("Testing agent timeout handling...")
+    import time
+    from agents.base import BaseAgent, Action
+    from game.config import GameConfig
+    from game.engine import Game
+
+    class SlowAgent(BaseAgent):
+        def get_action(self, state):
+            time.sleep(0.2)
+            return Action(1.0, 1.0)
+
+    config = GameConfig(players_per_team=1, agent_timeout_ms=10, max_ticks=5)
+    game = Game(config, [SlowAgent(0, 0)], [SlowAgent(1, 0)])
+
+    # Should not raise TimeoutError even though both agents exceed timeout.
+    game.step()
+    assert game.tick == 1, "Game tick should advance after a timed-out agent step"
+
+
 def test_logging():
     """Test game logging."""
     print("Testing logging...")
@@ -426,6 +447,9 @@ def main():
     print()
 
     test_game_engine()
+    print()
+
+    test_game_step_handles_agent_timeouts()
     print()
 
     test_logging()

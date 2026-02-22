@@ -205,16 +205,20 @@ class Game:
                 future = executor.submit(agent.get_action, state)
                 future_to_agent[future] = agent
 
-            for future in concurrent.futures.as_completed(
-                future_to_agent, timeout=timeout_sec
-            ):
-                agent = future_to_agent[future]
-                try:
-                    action = future.result(timeout=0.001)
-                    actions[(agent.team_id, agent.player_id)] = action
-                except (concurrent.futures.TimeoutError, Exception):
-                    # Default action on timeout or error
-                    actions[(agent.team_id, agent.player_id)] = Action(0.0, 0.0)
+            try:
+                for future in concurrent.futures.as_completed(
+                    future_to_agent, timeout=timeout_sec
+                ):
+                    agent = future_to_agent[future]
+                    try:
+                        action = future.result(timeout=0.001)
+                        actions[(agent.team_id, agent.player_id)] = action
+                    except (concurrent.futures.TimeoutError, Exception):
+                        # Default action on timeout or error
+                        actions[(agent.team_id, agent.player_id)] = Action(0.0, 0.0)
+            except concurrent.futures.TimeoutError:
+                # Some agents did not respond in time; defaults are filled below.
+                pass
 
         # Fill in any missing actions with defaults
         for agent in all_agents:
