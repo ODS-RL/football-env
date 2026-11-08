@@ -1,4 +1,3 @@
-import random
 import math
 from typing import TYPE_CHECKING
 
@@ -13,8 +12,8 @@ class RandomAgent(BaseAgent):
 
     def get_action(self, state: 'GameState') -> Action:
         """Return random acceleration."""
-        angle = random.uniform(0, 2 * math.pi)
-        magnitude = random.uniform(0, 0.5)
+        angle = self.rng.uniform(0, 2 * math.pi)
+        magnitude = self.rng.uniform(0, 0.5)
         return Action(
             ax=math.cos(angle) * magnitude,
             ay=math.sin(angle) * magnitude,
@@ -48,8 +47,8 @@ class ChaserAgent(BaseAgent):
             ax, ay = 0.0, 0.0
 
         # Add noise
-        ax += random.uniform(-self.noise, self.noise)
-        ay += random.uniform(-self.noise, self.noise)
+        ax += self.rng.uniform(-self.noise, self.noise)
+        ay += self.rng.uniform(-self.noise, self.noise)
 
         # Kick if close enough and cooldown is ready
         kick = dist <= self.kick_range and me.can_kick()
@@ -97,8 +96,8 @@ class GoalieAgent(BaseAgent):
             ax, ay = 0.0, 0.0
 
         # Add noise
-        ax += random.uniform(-self.noise, self.noise)
-        ay += random.uniform(-self.noise, self.noise)
+        ax += self.rng.uniform(-self.noise, self.noise)
+        ay += self.rng.uniform(-self.noise, self.noise)
 
         # Kick if ball is close enough
         ball_dx = ball.x - me.x

@@ -214,8 +214,16 @@ Examples:
         action="store_true",
         help="Skip confirmation prompt",
     )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        help="Random seed for reproducible sampling and matches",
+    )
 
     args = parser.parse_args()
+
+    if args.seed is not None:
+        random.seed(args.seed)
 
     # Apply fast presets
     if args.fast:
@@ -296,6 +304,7 @@ Examples:
         ticks=args.ticks,
         win_score=args.win_score,
         verbose=True,
+        seed=args.seed,
     )
 
     # Display results

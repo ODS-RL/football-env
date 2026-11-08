@@ -22,6 +22,9 @@ class KeyboardAgent(BaseAgent):
         self.pressed_keys: Optional[Set[int]] = None
         self.is_active = False
         self.fallback_agent = fallback_agent
+        if fallback_agent is not None:
+            # Share the fallback's RNG so seeding this wrapper seeds it too
+            self.rng = fallback_agent.rng
 
     def set_key_state(self, pressed_keys: Set[int]):
         """Link to renderer's key state set."""

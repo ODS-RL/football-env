@@ -27,6 +27,14 @@ class Game:
         self.logger = logger
         self.physics = Physics(config)
 
+        # All game randomness comes from this RNG; agents get child seeds so a
+        # fixed config.seed reproduces the whole match.
+        self.rng = random.Random(config.seed)
+        for agent in team0_agents + team1_agents:
+            agent_rng = getattr(agent, "rng", None)
+            if isinstance(agent_rng, random.Random):
+                agent_rng.seed(self.rng.getrandbits(64))
+
         # Initialize game state
         self.players: List[Player] = []
         self.ball: Ball = None
@@ -82,8 +90,8 @@ class Game:
         """Create ball at center of field with random initial velocity."""
         x, y = self.config.get_initial_ball_position()
         # Random initial velocity
-        angle = random.uniform(0, 2 * math.pi)
-        speed = random.uniform(2.0, 5.0)
+        angle = self.rng.uniform(0, 2 * math.pi)
+        speed = self.rng.uniform(2.0, 5.0)
         vx = math.cos(angle) * speed
         vy = math.sin(angle) * speed
         self.ball = Ball(
@@ -133,8 +141,8 @@ class Game:
         """Reset players and ball to initial positions after goal."""
         # Reset ball with random velocity
         x, y = self.config.get_initial_ball_position()
-        angle = random.uniform(0, 2 * math.pi)
-        speed = random.uniform(2.0, 5.0)
+        angle = self.rng.uniform(0, 2 * math.pi)
+        speed = self.rng.uniform(2.0, 5.0)
         self.ball.x = x
         self.ball.y = y
         self.ball.vx = math.cos(angle) * speed
@@ -150,8 +158,8 @@ class Game:
                 x, y = team0_positions[player.player_id]
             else:
                 x, y = team1_positions[player.player_id]
-            player.x = x + random.uniform(-jitter, jitter)
-            player.y = y + random.uniform(-jitter, jitter)
+            player.x = x + self.rng.uniform(-jitter, jitter)
+            player.y = y + self.rng.uniform(-jitter, jitter)
             player.vx = 0.0
             player.vy = 0.0
             player.kick_cooldown = 0  # Reset kick cooldown

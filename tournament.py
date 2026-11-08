@@ -9,8 +9,9 @@ to find optimal strategies and agent combinations.
 import argparse
 import itertools
 import json
+import random
 from dataclasses import dataclass, asdict
-from typing import List, Dict, Tuple
+from typing import List, Dict, Optional, Tuple
 import sys
 
 from game.config import GameConfig
@@ -82,6 +83,7 @@ def play_match(
     team1_comp: List[str],
     ticks: int = 3000,
     win_score: int = 5,
+    seed: Optional[int] = None,
 ) -> MatchResult:
     """Play a single match between two team compositions."""
     # Create config
@@ -89,6 +91,7 @@ def play_match(
         players_per_team=len(team0_comp),
         max_ticks=ticks,
         win_score=win_score,
+        seed=seed,
     )
 
     # Create agents
@@ -155,7 +158,6 @@ def generate_team_compositions(
 
     # Limit if requested
     if max_compositions and len(compositions) > max_compositions:
-        import random
         random.shuffle(compositions)
         compositions = compositions[:max_compositions]
 
@@ -168,6 +170,7 @@ def run_tournament(
     ticks: int = 3000,
     win_score: int = 5,
     verbose: bool = True,
+    seed: Optional[int] = None,
 ) -> Tuple[Dict[Tuple[str, ...], TeamStats], List[MatchResult]]:
     """
     Run a round-robin tournament with all compositions.
@@ -178,6 +181,7 @@ def run_tournament(
         ticks: Max ticks per match
         win_score: Score needed to win
         verbose: Print progress
+        seed: Base seed; each match gets a seed derived from it (None = random)
 
     Returns:
         Tuple of (team_stats_dict, all_match_results)
@@ -200,6 +204,7 @@ def run_tournament(
         print("-" * 60)
 
     match_count = 0
+    seed_rng = random.Random(seed)
 
     # Round-robin: each team plays each other team (including itself)
     for i, team0_comp in enumerate(compositions):
@@ -214,7 +219,8 @@ def run_tournament(
                     print(f"Progress: {match_count}/{total_matches} matches completed")
 
                 # Play match
-                result = play_match(team0_comp, team1_comp, ticks, win_score)
+                match_seed = seed_rng.getrandbits(32) if seed is not None else None
+                result = play_match(team0_comp, team1_comp, ticks, win_score, seed=match_seed)
                 all_results.append(result)
 
                 # Update stats
@@ -388,8 +394,16 @@ Examples:
         action="store_true",
         help="Don't allow duplicate agent types in a team",
     )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        help="Random seed for reproducible sampling and matches",
+    )
 
     args = parser.parse_args()
+
+    if args.seed is not None:
+        random.seed(args.seed)
 
     # Determine agent types to use
     if args.agents:
@@ -425,6 +439,7 @@ Examples:
         ticks=args.ticks,
         win_score=args.win_score,
         verbose=True,
+        seed=args.seed,
     )
 
     # Display results

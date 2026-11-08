@@ -1,5 +1,5 @@
-from dataclasses import dataclass, field
-from typing import Tuple
+from dataclasses import dataclass
+from typing import Optional, Tuple
 
 
 @dataclass
@@ -46,6 +46,9 @@ class GameConfig:
 
     # Goal celebration (ticks to freeze after goal before reset)
     goal_celebration_ticks: int = 45  # ~0.75 seconds at 60 ticks/sec
+
+    # Random seed for ball kickoff, reset jitter and agent RNGs (None = random)
+    seed: Optional[int] = None
 
     def get_goal_positions(self) -> Tuple[Tuple[float, float], Tuple[float, float]]:
         """Return (left_goal_center, right_goal_center)."""
@@ -102,6 +105,7 @@ class GameConfig:
             'kick_power': self.kick_power,
             'kick_range': self.kick_range,
             'kick_cooldown_ticks': self.kick_cooldown_ticks,
+            'seed': self.seed,
         }
 
     @classmethod

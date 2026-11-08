@@ -270,6 +270,11 @@ Examples:
         help="Display scale factor (default: 1.0)",
     )
     parser.add_argument(
+        "--seed",
+        type=int,
+        help="Random seed for a reproducible game (agent picks, kickoff, agent noise)",
+    )
+    parser.add_argument(
         "--keyboard",
         action="store_true",
         help="Enable keyboard control for team 0 (WASD=move, Space=kick, Tab=switch player)",
@@ -294,11 +299,15 @@ Examples:
         print("Error: --keyboard requires visualization (cannot use with --no-viz)")
         sys.exit(1)
 
+    if args.seed is not None:
+        random.seed(args.seed)  # Random fills in --agents / randomized preset
+
     # Create config
     config = GameConfig(
         players_per_team=args.players,
         max_ticks=args.ticks,
         win_score=args.win_score,
+        seed=args.seed,
     )
 
     # Create agents

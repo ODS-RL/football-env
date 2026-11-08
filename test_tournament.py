@@ -33,3 +33,18 @@ def test_self_match_counts_once():
     assert team.losses == 0
     assert team.draws == 1
 
+
+def test_seeded_tournament_is_reproducible():
+    """Same seed -> same results for every match."""
+    def run():
+        _, results = run_tournament(
+            compositions=[["chaser", "goalie"], ["striker", "random"]],
+            matches_per_pairing=2,
+            ticks=300,
+            win_score=2,
+            verbose=False,
+            seed=11,
+        )
+        return [(r.team0_score, r.team1_score, r.ticks_played) for r in results]
+
+    assert run() == run()

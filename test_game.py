@@ -352,6 +352,45 @@ def test_game_physics_integration():
     print(f"  Game ran for {game.tick} ticks, all states valid!")
 
 
+def test_seeded_games_are_reproducible():
+    """Same seed -> identical match, even with noisy agents on parallel threads."""
+    print("Testing seeded reproducibility...")
+    from agents.random_agent import ChaserAgent, RandomAgent, GoalieAgent
+    from game.config import GameConfig
+    from game.engine import Game
+
+    def play(seed):
+        config = GameConfig(players_per_team=2, max_ticks=800, seed=seed)
+        game = Game(config,
+                    [ChaserAgent(0, 0), RandomAgent(0, 1)],
+                    [GoalieAgent(1, 0), ChaserAgent(1, 1)])
+        game.run()
+        return tuple(game.score), game.ball.x, game.ball.y, tuple((p.x, p.y) for p in game.players)
+
+    first = play(7)
+    for _ in range(4):
+        assert play(7) == first, "Same seed should reproduce the match exactly"
+    assert play(8) != first, "Different seeds should give different matches"
+
+
+def test_seed_reaches_keyboard_fallback_agents():
+    """Seeding a KeyboardAgent wrapper must seed its fallback agent."""
+    print("Testing seeded keyboard fallback...")
+    from agents.keyboard_agent import KeyboardAgent
+    from agents.random_agent import ChaserAgent
+    from game.config import GameConfig
+    from game.engine import Game
+
+    def play():
+        config = GameConfig(players_per_team=1, max_ticks=300, seed=3)
+        wrapped = KeyboardAgent(0, 0, fallback_agent=ChaserAgent(0, 0))
+        game = Game(config, [wrapped], [ChaserAgent(1, 0)])
+        game.run()
+        return tuple((p.x, p.y) for p in game.players)
+
+    assert play() == play(), "Inactive keyboard players should be reproducible"
+
+
 def test_game_engine():
     """Test full game engine."""
     print("Testing game engine...")
@@ -705,6 +744,12 @@ def main():
     print()
 
     test_game_engine()
+    print()
+
+    test_seeded_games_are_reproducible()
+    print()
+
+    test_seed_reaches_keyboard_fallback_agents()
     print()
 
     test_game_step_handles_agent_timeouts()

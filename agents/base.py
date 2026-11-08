@@ -1,4 +1,5 @@
 import math
+import random
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
@@ -58,6 +59,9 @@ class BaseAgent(ABC):
         """
         self.team_id = team_id
         self.player_id = player_id
+        # Per-agent RNG. The game reseeds it from its own seed so runs are
+        # reproducible even though agents execute on parallel threads.
+        self.rng = random.Random()
 
     @abstractmethod
     def get_action(self, state: 'GameState') -> Action:
