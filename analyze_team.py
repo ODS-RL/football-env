@@ -11,6 +11,8 @@ import json
 from collections import Counter
 from typing import List, Dict, Tuple
 
+from agents.random_agent import AGENT_CLASSES
+
 
 # Agent role classifications
 AGENT_ROLES = {
@@ -25,6 +27,21 @@ AGENT_ROLES = {
     "random": {"defensive": 0.25, "offensive": 0.25, "midfield": 0.5},
 }
 
+# Used for agents without a role profile (e.g. custom or retired agents in old results)
+DEFAULT_ROLE = {"defensive": 1 / 3, "offensive": 1 / 3, "midfield": 1 / 3}
+
+
+def parse_composition(text: str) -> List[str]:
+    """Parse a comma-separated composition, rejecting unregistered agent types."""
+    composition = [agent.strip() for agent in text.split(",")]
+    unknown = [agent for agent in composition if agent not in AGENT_CLASSES]
+    if unknown:
+        raise SystemExit(
+            f"Error: unknown agent type(s): {', '.join(unknown)}. "
+            f"Known types: {', '.join(sorted(AGENT_CLASSES))}"
+        )
+    return composition
+
 
 def analyze_composition(composition: List[str]) -> Dict:
     """Analyze a single team composition."""
@@ -35,7 +52,7 @@ def analyze_composition(composition: List[str]) -> Dict:
     role_totals = {"defensive": 0.0, "offensive": 0.0, "midfield": 0.0}
 
     for agent_type in composition:
-        for role, value in AGENT_ROLES[agent_type].items():
+        for role, value in AGENT_ROLES.get(agent_type, DEFAULT_ROLE).items():
             role_totals[role] += value
 
     # Normalize by team size
@@ -113,6 +130,13 @@ def analyze_tournament_results(results_file: str, top_n: int = 10):
         data = json.load(f)
 
     team_stats = data["team_stats"]
+    if not team_stats:
+        print("No team statistics found in results file.")
+        return
+
+    unknown = sorted({a for t in team_stats for a in t["composition"]} - set(AGENT_ROLES))
+    if unknown:
+        print(f"Note: no role profile for {', '.join(unknown)}; treating as evenly split roles.")
 
     # Sort by win rate
     sorted_teams = sorted(
@@ -126,10 +150,10 @@ def analyze_tournament_results(results_file: str, top_n: int = 10):
     print("=" * 80)
 
     # Analyze top teams
-    print(f"\n📊 TOP {top_n} TEAMS ANALYSIS")
+    top_teams = sorted_teams[:max(1, top_n)]
+    print(f"\n📊 TOP {len(top_teams)} TEAMS ANALYSIS")
     print("-" * 80)
 
-    top_teams = sorted_teams[:top_n]
     top_analyses = [analyze_composition(team["composition"]) for team in top_teams]
 
     # Calculate averages for top teams
@@ -163,17 +187,19 @@ def analyze_tournament_results(results_file: str, top_n: int = 10):
     for team in top_teams:
         agent_frequency.update(team["composition"])
 
-    print(f"\nMost Common Agents in Top {top_n}:")
+    total_slots = sum(len(team["composition"]) for team in top_teams)
+    print(f"\nMost Common Agents in Top {len(top_teams)}:")
     for agent, count in agent_frequency.most_common(8):
-        pct = count / (len(top_teams) * top_teams[0].get("team_size", 2)) * 100
+        pct = count / total_slots * 100
         print(f"  {agent:12s}: {count:3d} appearances ({pct:.1f}%)")
 
-    # Analyze bottom teams for comparison
-    print(f"\n📉 BOTTOM {min(top_n, len(sorted_teams) - top_n)} TEAMS ANALYSIS")
-    print("-" * 80)
+    # Analyze bottom teams for comparison (never overlapping the top group)
+    bottom_count = min(top_n, max(0, len(sorted_teams) - len(top_teams)))
+    bottom_teams = sorted_teams[len(sorted_teams) - bottom_count:] if bottom_count else []
+    if bottom_teams:
+        print(f"\n📉 BOTTOM {len(bottom_teams)} TEAMS ANALYSIS")
+        print("-" * 80)
 
-    bottom_teams = sorted_teams[-top_n:]
-    if len(bottom_teams) > 0:
         bottom_analyses = [analyze_composition(team["composition"]) for team in bottom_teams]
 
         avg_diversity_bottom = sum(a["diversity_score"] for a in bottom_analyses) / len(bottom_analyses)
@@ -252,12 +278,12 @@ def main():
         analyze_tournament_results(args.results, top_n=args.top)
 
     elif args.compare:
-        comp1 = args.compare[0].split(",")
-        comp2 = args.compare[1].split(",")
+        comp1 = parse_composition(args.compare[0])
+        comp2 = parse_composition(args.compare[1])
         print(compare_compositions(comp1, comp2))
 
     elif args.analyze:
-        composition = args.analyze.split(",")
+        composition = parse_composition(args.analyze)
         analysis = analyze_composition(composition)
 
         print("\n" + "=" * 70)
