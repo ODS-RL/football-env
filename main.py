@@ -264,6 +264,7 @@ def run_game(
                 renderer.tick(60)
 
         renderer.close()
+        game.close()  # Window may close before the game ends
     else:
         # Run without visualization
         game.run()

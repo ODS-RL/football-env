@@ -204,6 +204,9 @@ class GameServer:
             # Maintain tick rate
             await asyncio.sleep(self.tick_interval * 0.2)
 
+        # Loop may exit early (window closed, everyone left)
+        self.game.close()
+
         # Game over - send final results
         final_state = self.game.get_state()
         winner = self.game.get_winner()

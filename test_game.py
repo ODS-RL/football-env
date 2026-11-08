@@ -345,9 +345,156 @@ def test_game_step_handles_agent_timeouts():
     config = GameConfig(players_per_team=1, agent_timeout_ms=10, max_ticks=5)
     game = Game(config, [SlowAgent(0, 0)], [SlowAgent(1, 0)])
 
-    # Should not raise TimeoutError even though both agents exceed timeout.
+    # Should not raise, and must not wait for the slow agents to finish.
+    start = time.perf_counter()
     game.step()
+    elapsed = time.perf_counter() - start
     assert game.tick == 1, "Game tick should advance after a timed-out agent step"
+    assert elapsed < 0.1, f"Step should respect the 10ms timeout, took {elapsed * 1000:.0f}ms"
+    for player in game.players:
+        assert player.vx == 0 and player.vy == 0, "Timed-out agents should get the default action"
+    game.close()
+
+
+def test_hung_agent_does_not_stall_game():
+    """An agent that never returns must not block later ticks."""
+    print("Testing hung agent handling...")
+    import threading
+    import time
+    from agents.base import BaseAgent, Action
+    from agents.random_agent import ChaserAgent
+    from game.config import GameConfig
+    from game.engine import Game
+    from game.state import GameStatus
+
+    release = threading.Event()
+
+    class HungAgent(BaseAgent):
+        def get_action(self, state):
+            release.wait()
+            return Action(1.0, 1.0)
+
+    config = GameConfig(players_per_team=1, agent_timeout_ms=10, max_ticks=20)
+    game = Game(config, [HungAgent(0, 0)], [ChaserAgent(1, 0)])
+    start = time.perf_counter()
+    while game.status == GameStatus.RUNNING:
+        game.step()
+    elapsed = time.perf_counter() - start
+    release.set()
+    # First tick waits for the timeout; later ticks skip the busy agent.
+    assert elapsed < 0.2, f"20 ticks with a hung agent took {elapsed * 1000:.0f}ms"
+
+
+def test_reset_waits_for_in_flight_action():
+    """reset() on a busy agent runs after its late get_action returns."""
+    print("Testing deferred agent reset...")
+    import threading
+    from agents.base import BaseAgent, Action
+    from game.agent_runner import AgentRunner
+
+    release = threading.Event()
+    events = []
+
+    class StatefulAgent(BaseAgent):
+        def get_action(self, state):
+            release.wait()
+            events.append("action")
+            return Action(1.0, 0.0)
+
+        def reset(self):
+            events.append("reset")
+
+    runner = AgentRunner([StatefulAgent(0, 0)])
+    actions = runner.get_actions(object(), timeout_sec=0.01)
+    assert actions[(0, 0)].ax == 0.0, "Timed-out agent should get the default action"
+
+    runner.reset_agents()
+    assert events == [], "Reset must not run while get_action is in flight"
+
+    release.set()
+    worker = runner._workers[0]
+    import time
+    assert worker.wait(time.monotonic() + 1.0) is None, "Late result computed before reset should be dropped"
+    assert events == ["action", "reset"], f"Unexpected order: {events}"
+
+    # Idle agent resets immediately and accepts new work.
+    runner.reset_agents()
+    assert events[-1] == "reset"
+    assert runner.get_actions(object(), timeout_sec=1.0)[(0, 0)].ax == 1.0
+    runner.close()
+
+
+def test_late_result_rejected_after_deadline():
+    """A result finished after the deadline is rejected even if already stored."""
+    print("Testing deadline enforcement...")
+    import time
+    from agents.base import BaseAgent, Action
+    from game.agent_runner import AgentRunner
+
+    class QuickAgent(BaseAgent):
+        def get_action(self, state):
+            return Action(1.0, 0.0)
+
+    runner = AgentRunner([QuickAgent(0, 0)])
+    worker = runner._workers[0]
+    deadline = time.monotonic()
+    time.sleep(0.005)
+    assert worker.submit(object())
+    time.sleep(0.05)  # Result is stored, but after the deadline
+    assert worker.wait(deadline) is None, "Post-deadline result must be rejected"
+    runner.close()
+
+
+def test_abandoned_game_stops_agent_threads():
+    """Dropping a game before it ends must stop its agent worker threads."""
+    print("Testing abandoned game cleanup...")
+    import gc
+    import threading
+    import time
+    from agents.random_agent import ChaserAgent
+    from game.config import GameConfig
+    from game.engine import Game
+
+    def agent_threads():
+        return [t for t in threading.enumerate() if t.name.startswith("agent-")]
+
+    before = len(agent_threads())
+    for _ in range(5):
+        game = Game(GameConfig(players_per_team=2, max_ticks=100),
+                    [ChaserAgent(0, i) for i in range(2)],
+                    [ChaserAgent(1, i) for i in range(2)])
+        game.step()
+        del game
+    gc.collect()
+    for _ in range(100):
+        if len(agent_threads()) <= before:
+            break
+        time.sleep(0.01)
+    assert len(agent_threads()) <= before, f"Leaked {len(agent_threads()) - before} agent threads"
+
+
+def test_invalid_agent_results_use_default_action():
+    """Agents that raise or return non-Action values get the default action."""
+    print("Testing invalid agent results...")
+    from agents.base import BaseAgent
+    from game.config import GameConfig
+    from game.engine import Game
+
+    class TupleAgent(BaseAgent):
+        def get_action(self, state):
+            return (1.0, 1.0)
+
+    class RaisingAgent(BaseAgent):
+        def get_action(self, state):
+            raise RuntimeError("boom")
+
+    config = GameConfig(players_per_team=1, max_ticks=5)
+    game = Game(config, [TupleAgent(0, 0)], [RaisingAgent(1, 0)])
+    game.step()
+    assert game.tick == 1
+    for player in game.players:
+        assert player.vx == 0 and player.vy == 0, "Invalid results should become (0, 0)"
+    game.close()
 
 
 def test_logging():
@@ -450,6 +597,21 @@ def main():
     print()
 
     test_game_step_handles_agent_timeouts()
+    print()
+
+    test_hung_agent_does_not_stall_game()
+    print()
+
+    test_reset_waits_for_in_flight_action()
+    print()
+
+    test_late_result_rejected_after_deadline()
+    print()
+
+    test_abandoned_game_stops_agent_threads()
+    print()
+
+    test_invalid_agent_results_use_default_action()
     print()
 
     test_logging()

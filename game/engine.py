@@ -1,8 +1,9 @@
-import concurrent.futures
 import random
 import math
+import weakref
 from typing import List, Tuple, Optional, TYPE_CHECKING
 
+from .agent_runner import AgentRunner
 from .config import GameConfig
 from .entities import Player, Ball, Goal
 from .physics import Physics
@@ -39,6 +40,11 @@ class Game:
         self.pending_goal_scorer: Optional[int] = None
 
         self._setup_game()
+
+        # Agents run on persistent worker threads with a per-tick deadline.
+        self._agent_runner = AgentRunner(team0_agents + team1_agents)
+        # Also stops workers if the game is dropped before it ends.
+        self._finalizer = weakref.finalize(self, self._agent_runner.close)
 
     def _setup_game(self) -> None:
         """Set up initial game state."""
@@ -150,9 +156,8 @@ class Game:
             player.vy = 0.0
             player.kick_cooldown = 0  # Reset kick cooldown
 
-        # Notify agents of reset
-        for agent in self.team0_agents + self.team1_agents:
-            agent.reset()
+        # Notify agents of reset (deferred for agents still mid-call)
+        self._agent_runner.reset_agents()
 
     def _process_kicks(self, actions: dict) -> None:
         """Process kick actions from all players."""
@@ -191,42 +196,13 @@ class Game:
                     player.kick_cooldown = self.config.kick_cooldown_ticks
 
     def _get_agent_actions(self, state: GameState) -> dict:
-        """Get actions from all agents with timeout."""
-        from agents.base import Action
-
-        actions = {}
+        """Get actions from all agents; late or invalid answers become (0, 0)."""
         timeout_sec = self.config.agent_timeout_ms / 1000.0
-        all_agents = self.team0_agents + self.team1_agents
+        return self._agent_runner.get_actions(state, timeout_sec)
 
-        # Use ThreadPoolExecutor for parallel agent calls with timeout
-        with concurrent.futures.ThreadPoolExecutor(max_workers=len(all_agents)) as executor:
-            future_to_agent = {}
-            for agent in all_agents:
-                future = executor.submit(agent.get_action, state)
-                future_to_agent[future] = agent
-
-            try:
-                for future in concurrent.futures.as_completed(
-                    future_to_agent, timeout=timeout_sec
-                ):
-                    agent = future_to_agent[future]
-                    try:
-                        action = future.result(timeout=0.001)
-                        actions[(agent.team_id, agent.player_id)] = action
-                    except (concurrent.futures.TimeoutError, Exception):
-                        # Default action on timeout or error
-                        actions[(agent.team_id, agent.player_id)] = Action(0.0, 0.0)
-            except concurrent.futures.TimeoutError:
-                # Some agents did not respond in time; defaults are filled below.
-                pass
-
-        # Fill in any missing actions with defaults
-        for agent in all_agents:
-            key = (agent.team_id, agent.player_id)
-            if key not in actions:
-                actions[key] = Action(0.0, 0.0)
-
-        return actions
+    def close(self) -> None:
+        """Stop agent worker threads. Called automatically when the game ends."""
+        self._finalizer()
 
     def step(self) -> Optional[int]:
         """
@@ -294,6 +270,9 @@ class Game:
         # Check time limit
         if self.tick >= self.config.max_ticks:
             self.status = GameStatus.ENDED
+
+        if self.status == GameStatus.ENDED:
+            self.close()
 
         return scoring_team
 
