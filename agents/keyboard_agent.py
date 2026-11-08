@@ -26,6 +26,11 @@ class KeyboardAgent(BaseAgent):
             # Share the fallback's RNG so seeding this wrapper seeds it too
             self.rng = fallback_agent.rng
 
+    def reset(self) -> None:
+        """Forward resets so the fallback AI clears its state after goals."""
+        if self.fallback_agent:
+            self.fallback_agent.reset()
+
     def set_key_state(self, pressed_keys: Set[int]):
         """Link to renderer's key state set."""
         self.pressed_keys = pressed_keys

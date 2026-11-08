@@ -391,6 +391,27 @@ def test_seed_reaches_keyboard_fallback_agents():
     assert play() == play(), "Inactive keyboard players should be reproducible"
 
 
+def test_keyboard_agent_forwards_reset():
+    """KeyboardAgent.reset() must reset its fallback AI."""
+    print("Testing keyboard reset forwarding...")
+    from agents.base import BaseAgent, Action
+    from agents.keyboard_agent import KeyboardAgent
+
+    class Counting(BaseAgent):
+        resets = 0
+
+        def get_action(self, state):
+            return Action(0.0, 0.0)
+
+        def reset(self):
+            self.resets += 1
+
+    fallback = Counting(0, 0)
+    KeyboardAgent(0, 0, fallback_agent=fallback).reset()
+    assert fallback.resets == 1
+    KeyboardAgent(0, 1).reset()  # No fallback: must not raise
+
+
 def test_game_engine():
     """Test full game engine."""
     print("Testing game engine...")
@@ -750,6 +771,9 @@ def main():
     print()
 
     test_seed_reaches_keyboard_fallback_agents()
+    print()
+
+    test_keyboard_agent_forwards_reset()
     print()
 
     test_game_step_handles_agent_timeouts()
