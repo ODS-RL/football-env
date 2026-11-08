@@ -17,19 +17,34 @@ from typing import List, Optional
 from game.config import GameConfig
 from game.engine import Game
 from agents.base import BaseAgent
-from agents.random_agent import (
-    AGENT_CLASSES,
-    RandomAgent, ChaserAgent, GoalieAgent,
-    StrikerAgent, DefenderAgent, InterceptorAgent,
-    MidfielderAgent, AggressorAgent, WingerAgent,
-)
+from agents.random_agent import AGENT_CLASSES
 from agents.keyboard_agent import KeyboardAgent, KeyboardController
 from game_logging.logger import GameLogger
 
-# Strategy presets (for backward compatibility)
+# Strategy presets: same formation for both teams (except "randomized")
 STRATEGY_PRESETS = ["mixed", "tactical", "aggressive", "balanced", "wings", "diverse", "randomized"]
 
-DEFAULT_AGENT_TYPE = "chaser"
+DIVERSE_CYCLE = ["goalie", "defender", "striker", "midfielder", "interceptor", "aggressor", "winger"]
+RANDOMIZED_POOL = ["goalie", "defender", "striker", "midfielder", "interceptor", "aggressor", "winger", "chaser"]
+
+
+def _preset_team(preset: str, n: int) -> List[str]:
+    """Agent type names for one team of n players under a preset."""
+    if preset == "mixed":
+        return (["goalie"] + ["chaser"] * n)[:n]
+    if preset == "tactical":
+        return (["goalie", "defender"] + ["striker"] * n)[:n]
+    if preset == "aggressive":
+        return ["aggressor"] * n
+    if preset == "balanced":
+        return (["goalie", "midfielder"] + ["striker"] * n)[:n]
+    if preset == "wings":
+        return (["goalie"] + ["winger"] * n)[:n]
+    if preset == "diverse":
+        return [DIVERSE_CYCLE[i % len(DIVERSE_CYCLE)] for i in range(n)]
+    if preset == "randomized":
+        return [random.choice(RANDOMIZED_POOL) for _ in range(n)]
+    raise ValueError(f"Unknown preset '{preset}'")
 
 
 def create_agents(config: GameConfig, agent_type: str = "mixed") -> tuple:
@@ -37,143 +52,53 @@ def create_agents(config: GameConfig, agent_type: str = "mixed") -> tuple:
 
     agent_type can be:
     - A preset strategy: mixed, tactical, aggressive, balanced, wings, diverse, randomized
-    - A single agent type: random, chaser, goalie, striker, defender, interceptor, midfielder, aggressor, winger
-    - Comma-separated agent types: goalie,striker,defender,chaser (assigns to players in order, both teams)
+    - A single agent type, used for every player: random, chaser, goalie, striker, ...
+    - Comma-separated agent types: goalie,striker,defender,chaser (first players_per_team
+      go to team 0, the rest to team 1). Missing slots are filled with random types.
 
-    For comma-separated: if fewer agents than needed (2 * players_per_team), fills randomly.
-    Raises ValueError if more agents specified than needed.
+    Raises ValueError for unknown names or more agents than players.
     """
-    team0_agents: List[BaseAgent] = []
-    team1_agents: List[BaseAgent] = []
     n = config.players_per_team
     total_needed = 2 * n
+    spec = agent_type.strip()
 
-    # Check if comma-separated or single agent type (not a preset strategy)
-    if "," in agent_type or (agent_type in AGENT_CLASSES and agent_type not in STRATEGY_PRESETS):
-        # Parse comma-separated agent types
-        agent_types = [t.strip() for t in agent_type.split(",")]
+    if spec in STRATEGY_PRESETS:
+        team0_types = _preset_team(spec, n)
+        team1_types = _preset_team(spec, n)
+    else:
+        agent_types = [t.strip() for t in spec.split(",")]
 
-        # Validate count
+        for i, at in enumerate(agent_types):
+            if at not in AGENT_CLASSES:
+                raise ValueError(
+                    f"Unknown agent type '{at}' at position {i + 1}. "
+                    f"Valid types: {', '.join(sorted(AGENT_CLASSES))}. "
+                    f"Valid presets: {', '.join(STRATEGY_PRESETS)}"
+                )
+
         if len(agent_types) > total_needed:
             raise ValueError(
                 f"Too many agents specified: {len(agent_types)} given, but only {total_needed} needed "
                 f"(2 teams × {n} players). Remove {len(agent_types) - total_needed} agent(s)."
             )
 
-        # Validate each agent type
-        for i, at in enumerate(agent_types):
-            if at not in AGENT_CLASSES:
-                valid_types = ", ".join(sorted(AGENT_CLASSES.keys()))
-                raise ValueError(f"Unknown agent type '{at}' at position {i + 1}. Valid types: {valid_types}")
+        if len(agent_types) == 1 and "," not in spec:
+            # A single type name means every player uses it
+            agent_types = agent_types * total_needed
+        else:
+            all_agent_types = list(AGENT_CLASSES)
+            while len(agent_types) < total_needed:
+                agent_types.append(random.choice(all_agent_types))
 
-        # Fill with random agents if fewer specified
-        all_agent_types = list(AGENT_CLASSES.keys())
-        while len(agent_types) < total_needed:
-            agent_types.append(random.choice(all_agent_types))
+        team0_types = agent_types[:n]
+        team1_types = agent_types[n:]
 
-        # First n agents go to team0, next n to team1
-        for i in range(n):
-            cls0 = AGENT_CLASSES[agent_types[i]]
-            cls1 = AGENT_CLASSES[agent_types[n + i]]
-            team0_agents.append(cls0(team_id=0, player_id=i))
-            team1_agents.append(cls1(team_id=1, player_id=i))
-
-        # Log selected agents
-        team0_names = [agent.__class__.__name__.replace("Agent", "") for agent in team0_agents]
-        team1_names = [agent.__class__.__name__.replace("Agent", "") for agent in team1_agents]
-        print(f"Team 0: {', '.join(team0_names)}")
-        print(f"Team 1: {', '.join(team1_names)}")
-
-        return team0_agents, team1_agents
-
-    if agent_type == "random":
-        for i in range(n):
-            team0_agents.append(RandomAgent(team_id=0, player_id=i))
-            team1_agents.append(RandomAgent(team_id=1, player_id=i))
-
-    elif agent_type == "chaser":
-        for i in range(n):
-            team0_agents.append(ChaserAgent(team_id=0, player_id=i))
-            team1_agents.append(ChaserAgent(team_id=1, player_id=i))
-
-    elif agent_type == "mixed":
-        # First player is goalie, rest are chasers
-        for i in range(n):
-            if i == 0:
-                team0_agents.append(GoalieAgent(team_id=0, player_id=i))
-                team1_agents.append(GoalieAgent(team_id=1, player_id=i))
-            else:
-                team0_agents.append(ChaserAgent(team_id=0, player_id=i))
-                team1_agents.append(ChaserAgent(team_id=1, player_id=i))
-
-    elif agent_type == "tactical":
-        # Goalie + Defender + Striker formation
-        for i in range(n):
-            if i == 0:
-                team0_agents.append(GoalieAgent(team_id=0, player_id=i))
-                team1_agents.append(GoalieAgent(team_id=1, player_id=i))
-            elif i == 1:
-                team0_agents.append(DefenderAgent(team_id=0, player_id=i))
-                team1_agents.append(DefenderAgent(team_id=1, player_id=i))
-            else:
-                team0_agents.append(StrikerAgent(team_id=0, player_id=i))
-                team1_agents.append(StrikerAgent(team_id=1, player_id=i))
-
-    elif agent_type == "aggressive":
-        # All aggressors
-        for i in range(n):
-            team0_agents.append(AggressorAgent(team_id=0, player_id=i))
-            team1_agents.append(AggressorAgent(team_id=1, player_id=i))
-
-    elif agent_type == "interceptor":
-        # Goalie + Interceptors
-        for i in range(n):
-            if i == 0:
-                team0_agents.append(GoalieAgent(team_id=0, player_id=i))
-                team1_agents.append(GoalieAgent(team_id=1, player_id=i))
-            else:
-                team0_agents.append(InterceptorAgent(team_id=0, player_id=i))
-                team1_agents.append(InterceptorAgent(team_id=1, player_id=i))
-
-    elif agent_type == "balanced":
-        # Goalie + Midfielder + Striker
-        for i in range(n):
-            if i == 0:
-                team0_agents.append(GoalieAgent(team_id=0, player_id=i))
-                team1_agents.append(GoalieAgent(team_id=1, player_id=i))
-            elif i == 1:
-                team0_agents.append(MidfielderAgent(team_id=0, player_id=i))
-                team1_agents.append(MidfielderAgent(team_id=1, player_id=i))
-            else:
-                team0_agents.append(StrikerAgent(team_id=0, player_id=i))
-                team1_agents.append(StrikerAgent(team_id=1, player_id=i))
-
-    elif agent_type == "wings":
-        # Goalie + Wingers
-        for i in range(n):
-            if i == 0:
-                team0_agents.append(GoalieAgent(team_id=0, player_id=i))
-                team1_agents.append(GoalieAgent(team_id=1, player_id=i))
-            else:
-                team0_agents.append(WingerAgent(team_id=0, player_id=i))
-                team1_agents.append(WingerAgent(team_id=1, player_id=i))
-
-    elif agent_type == "diverse":
-        # Each team gets different agent types
-        agent_classes = [GoalieAgent, DefenderAgent, StrikerAgent, MidfielderAgent, InterceptorAgent, AggressorAgent, WingerAgent]
-        for i in range(n):
-            cls = agent_classes[i % len(agent_classes)]
-            team0_agents.append(cls(team_id=0, player_id=i))
-            team1_agents.append(cls(team_id=1, player_id=i))
-
-    elif agent_type == "randomized":
-        # Randomly assign agent types to each player
-        agent_classes = [GoalieAgent, DefenderAgent, StrikerAgent, MidfielderAgent, InterceptorAgent, AggressorAgent, WingerAgent, ChaserAgent]
-        for i in range(n):
-            cls0 = random.choice(agent_classes)
-            cls1 = random.choice(agent_classes)
-            team0_agents.append(cls0(team_id=0, player_id=i))
-            team1_agents.append(cls1(team_id=1, player_id=i))
+    team0_agents: List[BaseAgent] = [
+        AGENT_CLASSES[t](team_id=0, player_id=i) for i, t in enumerate(team0_types)
+    ]
+    team1_agents: List[BaseAgent] = [
+        AGENT_CLASSES[t](team_id=1, player_id=i) for i, t in enumerate(team1_types)
+    ]
 
     # Log selected agents
     team0_names = [agent.__class__.__name__.replace("Agent", "") for agent in team0_agents]
@@ -285,7 +210,8 @@ Examples:
   python main.py --agents tactical                        # Use tactical preset
   python main.py --agents goalie,striker                  # Specify each player's agent
   python main.py --agents goalie,striker,goalie,defender  # Full team specification (2v2)
-  python main.py --players 3 --agents goalie,striker      # Partial spec, rest use default
+  python main.py --agents striker                         # Every player is a striker
+  python main.py --players 3 --agents goalie,striker      # Partial spec, rest are random
         """,
     )
 
@@ -320,7 +246,8 @@ Examples:
     parser.add_argument(
         "--agents",
         default="randomized",
-        help="Agent configuration. Can be a preset (mixed, tactical, aggressive, balanced, wings, diverse, randomized) "
+        help="Agent configuration. Can be a preset (mixed, tactical, aggressive, balanced, wings, diverse, randomized), "
+             "a single agent type used for every player (e.g., striker), "
              "or comma-separated agent types for each player (e.g., goalie,striker,defender,chaser). "
              "Available agent types: random, chaser, goalie, striker, defender, interceptor, midfielder, aggressor, winger. "
              "If fewer agents are specified than needed (2 * players_per_team), remaining slots are filled randomly. "
@@ -329,12 +256,12 @@ Examples:
     parser.add_argument(
         "--log",
         metavar="PATH",
-        help="Path to save game log",
+        help="Save game log to PATH (implies --save-log)",
     )
     parser.add_argument(
         "--save-log",
         action="store_true",
-        help="Save game log to file",
+        help="Save game log to a timestamped file",
     )
     parser.add_argument(
         "--scale",
@@ -359,6 +286,14 @@ Examples:
             sys.exit(1)
         return
 
+    if args.players < 1:
+        print("Error: --players must be at least 1")
+        sys.exit(1)
+
+    if args.keyboard and args.no_viz:
+        print("Error: --keyboard requires visualization (cannot use with --no-viz)")
+        sys.exit(1)
+
     # Create config
     config = GameConfig(
         players_per_team=args.players,
@@ -367,27 +302,22 @@ Examples:
     )
 
     # Create agents
+    try:
+        team0, team1 = create_agents(config, args.agents)
+    except ValueError as e:
+        print(f"Error: {e}")
+        sys.exit(1)
+
     keyboard_controller = None
     if args.keyboard:
-        if args.no_viz:
-            print("Error: --keyboard requires visualization (cannot use with --no-viz)")
-            sys.exit(1)
-        # Create AI agents for both teams first
-        ai_team0, team1 = create_agents(config, args.agents)
         # Wrap team 0 AI agents with keyboard control (AI is fallback when not active)
         keyboard_agents = [
-            KeyboardAgent(0, i, fallback_agent=ai_team0[i])
+            KeyboardAgent(0, i, fallback_agent=team0[i])
             for i in range(config.players_per_team)
         ]
-        team0: List[BaseAgent] = list(keyboard_agents)
+        team0 = list(keyboard_agents)
         keyboard_controller = KeyboardController(keyboard_agents)
-        print(f"Team 0: Keyboard-controlled (AI fallback when not active)")
-    else:
-        try:
-            team0, team1 = create_agents(config, args.agents)
-        except ValueError as e:
-            print(f"Error: {e}")
-            sys.exit(1)
+        print("Team 0: Keyboard-controlled (AI fallback when not active)")
 
     print(f"Starting {args.players}v{args.players} game")
     print(f"Max ticks: {args.ticks}, Win score: {args.win_score}")
@@ -404,7 +334,7 @@ Examples:
         team1,
         visualize=not args.no_viz,
         log_path=args.log,
-        save_log=args.save_log,
+        save_log=args.save_log or args.log is not None,
         keyboard_controller=keyboard_controller,
     )
 
