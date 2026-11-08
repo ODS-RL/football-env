@@ -497,6 +497,63 @@ def test_invalid_agent_results_use_default_action():
     game.close()
 
 
+def _idle_game(**config_overrides):
+    from agents.base import BaseAgent, Action
+    from game.config import GameConfig
+    from game.engine import Game
+
+    class Idle(BaseAgent):
+        def get_action(self, state):
+            return Action(0.0, 0.0)
+
+    config = GameConfig(players_per_team=1, **config_overrides)
+    return Game(config, [Idle(0, 0)], [Idle(1, 0)])
+
+
+def _put_ball_in_right_goal(game):
+    game.ball.x = game.config.field_width + game.config.ball_radius + 5
+    game.ball.y = game.config.field_height / 2
+    game.ball.vx = game.ball.vy = 0.0
+
+
+def test_goal_counts_when_time_runs_out_during_celebration():
+    """A goal still celebrating when max_ticks hits must be counted."""
+    print("Testing goal at the time limit...")
+    from game.state import GameStatus
+
+    game = _idle_game(max_ticks=20)
+    for _ in range(10):
+        game.step()
+    _put_ball_in_right_goal(game)
+    assert game.step() == 0, "Goal should be detected for team 0"
+    while game.status == GameStatus.RUNNING:
+        game.step()
+    assert game.score == [1, 0], f"Goal lost at time limit: score={game.score}"
+
+
+def test_step_reports_each_goal_once():
+    """step() returns the scorer only on the tick the goal is detected."""
+    print("Testing step() goal reporting...")
+    game = _idle_game(max_ticks=500)
+    _put_ball_in_right_goal(game)
+    results = [game.step() for _ in range(game.config.goal_celebration_ticks + 5)]
+    goals = [r for r in results if r is not None]
+    assert goals == [0], f"Expected one report for team 0, got {goals}"
+    assert game.score == [1, 0]
+    game.close()
+
+
+def test_goal_counts_without_celebration():
+    """goal_celebration_ticks=0 still awards the goal immediately."""
+    print("Testing goal with no celebration...")
+    game = _idle_game(max_ticks=500, goal_celebration_ticks=0)
+    _put_ball_in_right_goal(game)
+    assert game.step() == 0
+    assert game.score == [1, 0], f"Goal not awarded: score={game.score}"
+    assert game.ball.x == game.config.field_width / 2, "Positions should reset after the goal"
+    game.close()
+
+
 def test_logging():
     """Test game logging."""
     print("Testing logging...")
@@ -612,6 +669,15 @@ def main():
     print()
 
     test_invalid_agent_results_use_default_action()
+    print()
+
+    test_goal_counts_when_time_runs_out_during_celebration()
+    print()
+
+    test_step_reports_each_goal_once()
+    print()
+
+    test_goal_counts_without_celebration()
     print()
 
     test_logging()

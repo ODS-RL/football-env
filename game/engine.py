@@ -204,10 +204,22 @@ class Game:
         """Stop agent worker threads. Called automatically when the game ends."""
         self._finalizer()
 
+    def _award_pending_goal(self) -> None:
+        """Add the pending goal to the score and end the game on a win."""
+        scorer = self.pending_goal_scorer
+        if scorer is None:
+            return
+        self.pending_goal_scorer = None
+        self.goal_celebration_remaining = 0
+        self.score[scorer] += 1
+        if self.score[scorer] >= self.config.win_score:
+            self.status = GameStatus.ENDED
+
     def step(self) -> Optional[int]:
         """
         Advance game by one tick.
-        Returns scoring team if a goal was scored, None otherwise.
+        Returns the scoring team on the tick a goal is detected, None otherwise.
+        The score itself updates when the celebration ends (or at the time limit).
         """
         if self.status != GameStatus.RUNNING:
             return None
@@ -228,16 +240,10 @@ class Game:
 
             self.goal_celebration_remaining -= 1
 
-            # Celebration ended - reset and update score
+            # Celebration ended - update score and reset
             if self.goal_celebration_remaining == 0 and self.pending_goal_scorer is not None:
-                scoring_team = self.pending_goal_scorer
-                self.score[scoring_team] += 1
+                self._award_pending_goal()
                 self.reset_positions()
-                self.pending_goal_scorer = None
-
-                # Check win condition
-                if self.score[scoring_team] >= self.config.win_score:
-                    self.status = GameStatus.ENDED
         else:
             # Normal gameplay - get actions from agents
             actions = self._get_agent_actions(state)
@@ -263,12 +269,17 @@ class Game:
                 self.goal_celebration_remaining = self.config.goal_celebration_ticks
                 self.pending_goal_scorer = detected_scorer
                 scoring_team = detected_scorer
+                if self.goal_celebration_remaining <= 0:
+                    # No celebration configured: count it right away
+                    self._award_pending_goal()
+                    self.reset_positions()
 
         # Advance tick
         self.tick += 1
 
-        # Check time limit
-        if self.tick >= self.config.max_ticks:
+        # Check time limit; a goal still celebrating at the whistle counts
+        if self.tick >= self.config.max_ticks and self.status == GameStatus.RUNNING:
+            self._award_pending_goal()
             self.status = GameStatus.ENDED
 
         if self.status == GameStatus.ENDED:
