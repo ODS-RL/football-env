@@ -175,6 +175,10 @@ def run_tournament(
     """
     Run a round-robin tournament with all compositions.
 
+    Sides alternate between matches of a pairing, and the starting side
+    depends on (i + j) parity, so every composition plays on the left in
+    about half its matches even when matches_per_pairing is odd.
+
     Args:
         compositions: List of team compositions to test
         matches_per_pairing: Number of times each pair plays
@@ -207,12 +211,18 @@ def run_tournament(
     seed_rng = random.Random(seed)
 
     # Round-robin: each team plays each other team (including itself)
-    for i, team0_comp in enumerate(compositions):
-        for j, team1_comp in enumerate(compositions):
+    for i, comp_a in enumerate(compositions):
+        for j, comp_b in enumerate(compositions):
             if i > j:
                 continue  # Avoid duplicate pairings (A vs B and B vs A)
 
             for match_num in range(matches_per_pairing):
+                # Alternate who plays on the left (team 0)
+                if (i + j + match_num) % 2 == 0:
+                    team0_comp, team1_comp = comp_a, comp_b
+                else:
+                    team0_comp, team1_comp = comp_b, comp_a
+
                 match_count += 1
 
                 if verbose and match_count % 10 == 0:

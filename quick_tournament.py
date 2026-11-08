@@ -41,10 +41,12 @@ def select_representative_teams(
     elif strategy == "coverage":
         # Ensure each agent type appears in multiple teams
         selected = []
-        agent_counts = {agent: 0 for agent in AGENT_CLASSES.keys()}
+        # Balance over the agent types actually in play, not the whole registry
+        agent_types = sorted({agent for comp in all_compositions for agent in comp})
+        agent_counts = {agent: 0 for agent in agent_types}
 
         # First pass: ensure minimum coverage
-        min_appearances = max_teams // len(AGENT_CLASSES)
+        min_appearances = max_teams // len(agent_types)
 
         shuffled = all_compositions.copy()
         random.shuffle(shuffled)
@@ -56,7 +58,7 @@ def select_representative_teams(
             # Check if this team helps balance agent representation
             min_agent_count = min(agent_counts[agent] for agent in comp)
 
-            if min_agent_count < min_appearances or len(selected) < len(AGENT_CLASSES):
+            if min_agent_count < min_appearances or len(selected) < len(agent_types):
                 selected.append(comp)
                 for agent in comp:
                     agent_counts[agent] += 1
