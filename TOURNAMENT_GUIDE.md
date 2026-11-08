@@ -23,9 +23,6 @@ We've created a tournament system to systematically test different team composit
 Test common agent combinations:
 
 ```bash
-cd ~/code/football-agent
-source venv/bin/activate
-
 # Quick test with common agents (2v2)
 python tournament.py --players 2 --preset common --matches 2 --ticks 1000
 

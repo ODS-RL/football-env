@@ -42,7 +42,7 @@ class GameServer:
         config: GameConfig,
         host: str = "0.0.0.0",
         port: int = 8765,
-        tick_rate: int = 30,
+        tick_rate: int = 60,
         viz: bool = False,
     ):
         self.config = config

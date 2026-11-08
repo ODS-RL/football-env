@@ -39,9 +39,6 @@ We ran a tournament with 15 different 2v2 team compositions. Here are the key fi
 ### 1. Run a Tournament
 
 ```bash
-cd ~/code/football-agent
-source venv/bin/activate
-
 # Quick test with common agents
 python tournament.py --players 2 --preset common --matches 3
 

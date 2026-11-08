@@ -670,8 +670,12 @@ def test_logging():
     from agents.random_agent import ChaserAgent
     from game_logging.logger import GameLogger
 
+    import os
+    import tempfile
     config = GameConfig(players_per_team=1, max_ticks=50)
-    logger = GameLogger(config, output_path="test_log.json")
+    tmpdir = tempfile.mkdtemp(prefix="football_test_")
+    log_path = os.path.join(tmpdir, "test_log.json")
+    logger = GameLogger(config, output_path=log_path)
 
     team0 = [ChaserAgent(team_id=0, player_id=0)]
     team1 = [ChaserAgent(team_id=1, player_id=0)]
@@ -684,8 +688,11 @@ def test_logging():
 
     # Verify log can be loaded
     from game_logging.logger import load_game_log
-    log_data = load_game_log("test_log.json")
+    log_data = load_game_log(log_path)
     print(f"  Log contains {log_data['total_ticks']} states")
+
+    import shutil
+    shutil.rmtree(tmpdir, ignore_errors=True)
 
 
 def test_agents():
@@ -813,7 +820,6 @@ def main():
     print("You can now run:")
     print("  python main.py              # Run with visualization")
     print("  python main.py --no-viz     # Run without visualization")
-    print("  python main.py --replay test_log.json  # Replay the test game")
 
 
 if __name__ == "__main__":

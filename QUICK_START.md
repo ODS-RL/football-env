@@ -18,9 +18,6 @@ Use `quick_tournament.py` to sample representative teams and finish in minutes!
 ### 5v5 Tournament (Finishes in ~5 minutes)
 
 ```bash
-cd ~/code/football-agent
-source venv/bin/activate
-
 # Sample 100 teams with intelligent diversity
 python quick_tournament.py --players 5 --preset competitive --sample 100 --fast
 ```

@@ -211,3 +211,7 @@ __marimo__/
 .football_clients.pid
 
 .DS_Store
+
+# Game logs written by main.py --save-log and tests
+game_log_*.json
+test_log.json

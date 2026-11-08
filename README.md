@@ -39,6 +39,8 @@ python main.py --replay LOG.json            # Replay a game log
 python main.py --players 3                  # 3v3 game
 python main.py --agents tactical            # Use tactical preset
 python main.py --agents goalie,striker      # Specify each player's agent
+python main.py --agents striker             # Every player is a striker
+python main.py --no-viz --seed 42           # Reproducible game
 ```
 
 ## Command Line Options
@@ -50,9 +52,11 @@ python main.py --agents goalie,striker      # Specify each player's agent
 | `--players N` | Players per team | 2 |
 | `--ticks N` | Max game ticks | 3000 |
 | `--win-score N` | Score to win | 5 |
-| `--agents TYPE` | Agent configuration (see below) | randomized |
-| `--log PATH` | Path to save game log | auto |
-| `--no-log` | Disable game log saving | False |
+| `--agents TYPE` | Preset, single agent type, or comma-separated list (see below) | randomized |
+| `--log PATH` | Save game log to PATH | - |
+| `--save-log` | Save game log to a timestamped file | False |
+| `--seed N` | Random seed for a reproducible game | random |
+| `--keyboard` | Control team 0 with WASD/Space, Tab to switch player | False |
 | `--scale F` | Display scale factor | 1.0 |
 
 ## Agents
