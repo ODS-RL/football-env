@@ -29,21 +29,26 @@ class Physics:
             entity.vy = entity.vy / speed * max_speed
 
     def update_positions(self, players: List[Player], ball: Ball) -> None:
-        """Update all entity positions based on velocities."""
+        """Update all entity positions based on velocities.
+
+        Speeds are clamped before moving so kicks and collision impulses can
+        never carry an entity further than its max speed in one tick.
+        """
         for player in players:
+            self._clamp_velocity(player, self.config.player_max_speed)
             player.x += player.vx
             player.y += player.vy
             # Apply friction to players
             player.vx *= self.config.player_friction
             player.vy *= self.config.player_friction
 
+        self._clamp_velocity(ball, self.config.ball_max_speed)
         ball.x += ball.vx
         ball.y += ball.vy
 
         # Apply friction to ball
         ball.vx *= self.config.ball_friction
         ball.vy *= self.config.ball_friction
-        self._clamp_velocity(ball, self.config.ball_max_speed)
 
     def _is_in_corner_region(self, x: float, y: float) -> Optional[tuple]:
         """
@@ -142,11 +147,12 @@ class Physics:
                     entity.x = cx + nx * max_dist
                     entity.y = cy + ny * max_dist
 
-                    # Reflect velocity
+                    # Reflect the normal component, scaled by restitution
+                    # (same rule as the straight walls: v_n -> -e * v_n)
                     dot = entity.vx * nx + entity.vy * ny
                     if dot > 0:  # Moving away from center (toward corner)
-                        entity.vx -= 2 * dot * nx * restitution
-                        entity.vy -= 2 * dot * ny * restitution
+                        entity.vx -= (1 + restitution) * dot * nx
+                        entity.vy -= (1 + restitution) * dot * ny
                 else:
                     # At center, valid position
                     pass

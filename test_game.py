@@ -272,6 +272,54 @@ def test_goal_net_physics():
     print("  Goal net physics verified!")
 
 
+def test_kicked_ball_respects_max_speed():
+    """A kick on a fast ball must not move it further than ball_max_speed."""
+    print("Testing ball speed cap after kick...")
+    from agents.base import Action
+
+    game = _idle_game()
+    player = game.players[0]
+    player.x, player.y = 400.0, 300.0
+    game.ball.x, game.ball.y, game.ball.vx, game.ball.vy = 432.0, 300.0, 14.0, 0.0
+    start_x = game.ball.x
+    game._process_kicks({(0, 0): Action(0.0, 0.0, True)})
+    game.physics.update_positions([], game.ball)
+    moved = game.ball.x - start_x
+    assert moved <= game.config.ball_max_speed + 1e-9, f"Ball moved {moved:.1f} in one tick"
+    game.close()
+
+
+def test_corner_bounce_matches_wall_bounce():
+    """Head-on bounces lose the same speed in corners as on straight walls."""
+    print("Testing corner restitution...")
+    import math
+    from game.config import GameConfig
+    from game.entities import Ball, Player
+    from game.physics import Physics
+
+    physics = Physics(GameConfig())
+    r = GameConfig().corner_radius
+
+    for make, radius, restitution in (
+        (lambda **kw: Ball(radius=10, **kw), 10, 0.8),
+        (lambda **kw: Player(radius=20, team_id=0, player_id=0, **kw), 20, 0.5),
+    ):
+        wall = make(x=500, y=radius - 5, vx=0.0, vy=-10.0)
+        physics._enforce_boundary(wall, radius, is_ball=radius == 10)
+
+        # Heading straight out along the diagonal of the top-left corner
+        d = (r - radius + 5) / math.sqrt(2)
+        v = 10 / math.sqrt(2)
+        corner = make(x=r - d, y=r - d, vx=-v, vy=-v)
+        physics._enforce_boundary(corner, radius, is_ball=radius == 10)
+
+        assert math.isclose(abs(wall.vy), 10 * restitution), f"wall bounce {wall.vy}"
+        corner_speed = math.hypot(corner.vx, corner.vy)
+        assert math.isclose(corner_speed, 10 * restitution), (
+            f"corner bounce {corner_speed:.2f}, expected {10 * restitution:.2f}"
+        )
+
+
 def test_game_physics_integration():
     """Test that physics state stays valid throughout a full game."""
     print("Testing game physics integration...")
@@ -642,6 +690,12 @@ def main():
     print()
 
     test_goal_net_physics()
+    print()
+
+    test_kicked_ball_respects_max_speed()
+    print()
+
+    test_corner_bounce_matches_wall_bounce()
     print()
 
     test_game_physics_integration()
