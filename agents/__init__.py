@@ -9,4 +9,5 @@ from .random_agent import (
     MidfielderAgent,
     AggressorAgent,
     WingerAgent,
+    AGENT_CLASSES,
 )

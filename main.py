@@ -18,25 +18,13 @@ from game.config import GameConfig
 from game.engine import Game
 from agents.base import BaseAgent
 from agents.random_agent import (
+    AGENT_CLASSES,
     RandomAgent, ChaserAgent, GoalieAgent,
     StrikerAgent, DefenderAgent, InterceptorAgent,
     MidfielderAgent, AggressorAgent, WingerAgent,
 )
 from agents.keyboard_agent import KeyboardAgent, KeyboardController
 from game_logging.logger import GameLogger
-
-# Mapping from agent type names to classes
-AGENT_CLASSES = {
-    "random": RandomAgent,
-    "chaser": ChaserAgent,
-    "goalie": GoalieAgent,
-    "striker": StrikerAgent,
-    "defender": DefenderAgent,
-    "interceptor": InterceptorAgent,
-    "midfielder": MidfielderAgent,
-    "aggressor": AggressorAgent,
-    "winger": WingerAgent,
-}
 
 # Strategy presets (for backward compatibility)
 STRATEGY_PRESETS = ["mixed", "tactical", "aggressive", "balanced", "wings", "diverse", "randomized"]

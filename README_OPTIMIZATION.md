@@ -2,7 +2,7 @@
 
 ## The Problem: Agent Clustering
 
-When using multiple agents of the same type (e.g., 4x Messi), they often cluster around the ball, creating several issues:
+When using multiple agents of the same type (e.g., 4x Aggressor), they often cluster around the ball, creating several issues:
 
 - **Physical blocking**: Agents get in each other's way
 - **Redundant behavior**: Multiple agents trying to do the same thing
@@ -30,9 +30,7 @@ We ran a tournament with 15 different 2v2 team compositions. Here are the key fi
 - **No clustering**: Agents have distinct behaviors and positions
 
 ### What Doesn't Work
-- **Messi + Messi**: 0% diversity, agents cluster, poor performance
 - **Goalie + Goalie**: Overly defensive, low scoring
-- **Midfielder + Messi**: -10 goal difference, worst performer
 
 ---
 
@@ -58,10 +56,10 @@ python tournament.py --players 2 --preset competitive --matches 5 --output resul
 python analyze_team.py --results results.json
 
 # Compare specific teams
-python analyze_team.py --compare "striker,midfielder" "messi,messi"
+python analyze_team.py --compare "striker,midfielder" "aggressor,aggressor"
 
 # Analyze a single composition
-python analyze_team.py --analyze "goalie,messi"
+python analyze_team.py --analyze "goalie,aggressor"
 ```
 
 ### 3. Test the Winners
@@ -78,7 +76,7 @@ python main.py --agents striker,midfielder,defender,goalie --scale 1.5
 ### Diversity Score (0-1)
 - Measures variety of agent types in a team
 - **1.0**: All different agents (striker, midfielder)
-- **0.0**: All same agents (messi, messi)
+- **0.0**: All same agents (aggressor, aggressor)
 - **Finding**: Higher diversity generally performs better
 
 ### Balance Score (0-1)
@@ -91,7 +89,7 @@ python main.py --agents striker,midfielder,defender,goalie --scale 1.5
 Each agent contributes to three roles:
 - **Defensive**: Goal protection, ball clearing (Goalie: 1.0, Defender: 0.8)
 - **Midfield**: Transition, support (Midfielder: 0.4)
-- **Offensive**: Goal scoring, attacking (Striker: 0.9, Messi: 0.7)
+- **Offensive**: Goal scoring, attacking (Striker: 0.9, Aggressor: 0.7)
 
 ---
 
@@ -123,8 +121,7 @@ From our test tournament:
 ### ✗ What Doesn't Work
 
 **1. Duplicate Aggressive Agents**
-- Messi + Messi
-- Striker + Striker (not tested but would likely cluster)
+- e.g. Aggressor + Aggressor or Striker + Striker (expected; not measured)
 
 **Why**: Same behavior → clustering → interference
 
@@ -133,12 +130,6 @@ From our test tournament:
 - Defender + Defender (6.2% win rate)
 
 **Why**: Can't score goals to win
-
-**3. Messi Without Support**
-- Messi + Midfielder (worst: -10 goal difference)
-- Messi + Goalie (poor performer)
-
-**Why**: Messi needs teammates to cover other roles
 
 ---
 
@@ -153,7 +144,7 @@ python main.py --agents striker,midfielder,defender,goalie
 
 **Aggressive**:
 ```bash
-python main.py --agents messi,striker,defender,goalie
+python main.py --agents aggressor,striker,defender,goalie
 ```
 
 **Defensive**:
@@ -162,7 +153,7 @@ python main.py --agents goalie,defender,goalie,midfielder
 ```
 
 **Avoid**:
-- messi,messi (clustering)
+- aggressor,aggressor (clustering)
 - goalie,goalie (too defensive)
 - Any duplicate aggressive agents
 
@@ -170,7 +161,7 @@ python main.py --agents goalie,defender,goalie,midfielder
 
 **Balanced**:
 ```bash
-python main.py --players 3 --agents goalie,midfielder,striker,goalie,defender,messi
+python main.py --players 3 --agents goalie,midfielder,striker,goalie,defender,aggressor
 ```
 
 **Wing Play**:
@@ -185,7 +176,7 @@ python main.py --players 3 --agents goalie,winger,striker,goalie,winger,midfield
 - Use `--no-duplicates` flag in tournament testing
 - Focus on one specialist per role
 - Consider: 1 Goalie, 1-2 Defenders, 1-2 Midfielders, 1-2 Attackers
-- Use varied attackers (Messi, Striker, Winger) instead of duplicates
+- Use varied attackers (Aggressor, Striker, Winger) instead of duplicates
 
 ---
 
@@ -196,7 +187,7 @@ python main.py --players 3 --agents goalie,winger,striker,goalie,winger,midfield
 ```bash
 # Test only specific combinations
 python tournament.py --players 2 \
-  --agents messi,goalie,striker,defender,interceptor \
+  --agents aggressor,goalie,striker,defender,interceptor \
   --matches 5 \
   --output custom_test.json
 ```
@@ -237,7 +228,7 @@ For more reliable results:
 **Goalie + Aggressive Forward**
 - Goalie protects, forward scores
 - Clear role separation
-- Example: goalie,messi or goalie,striker
+- Example: goalie,aggressor or goalie,striker
 
 **Defender + Midfielder**
 - Defender protects, midfielder transitions
@@ -262,7 +253,7 @@ For more reliable results:
 - Result: Poor coordination
 
 **No Defensive Coverage**
-- Example: striker,striker or messi,messi
+- Example: striker,striker or aggressor,aggressor
 - Easy to score against
 - Result: High goals conceded
 
@@ -303,7 +294,7 @@ python tournament.py --players 2 --agents YOUR_AGENTS --output improved.json
 - **[tournament.py](tournament.py)**: Run round-robin tournaments
 - **[analyze_team.py](analyze_team.py)**: Analyze results and compositions
 - **[TOURNAMENT_GUIDE.md](TOURNAMENT_GUIDE.md)**: Complete command reference
-- **[agents/messi_agent.py](agents/messi_agent.py)**: Messi agent implementation
+- **[agents/random_agent.py](agents/random_agent.py)**: Built-in agents and the `AGENT_CLASSES` registry
 
 ---
 
@@ -316,6 +307,6 @@ python tournament.py --players 2 --agents YOUR_AGENTS --output improved.json
 5. **Analyze results** - Use analyze_team.py to understand why
 6. **Iterate** - Improve agents based on findings
 
-**The 4x Messi problem is solved by using diverse team compositions!**
+**The clustering problem is solved by using diverse team compositions!**
 
 Use the tournament system to find the optimal mix for your specific needs.

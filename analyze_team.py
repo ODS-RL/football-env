@@ -18,7 +18,6 @@ AGENT_ROLES = {
     "defender": {"defensive": 0.8, "offensive": 0.1, "midfield": 0.1},
     "midfielder": {"defensive": 0.3, "offensive": 0.3, "midfield": 0.4},
     "striker": {"defensive": 0.0, "offensive": 0.9, "midfield": 0.1},
-    "messi": {"defensive": 0.1, "offensive": 0.7, "midfield": 0.2},
     "interceptor": {"defensive": 0.4, "offensive": 0.3, "midfield": 0.3},
     "aggressor": {"defensive": 0.2, "offensive": 0.7, "midfield": 0.1},
     "winger": {"defensive": 0.1, "offensive": 0.6, "midfield": 0.3},
@@ -49,7 +48,7 @@ def analyze_composition(composition: List[str]) -> Dict:
 
     # Detect patterns
     has_goalie = "goalie" in composition
-    has_dedicated_striker = any(a in composition for a in ["striker", "messi", "aggressor"])
+    has_dedicated_striker = any(a in composition for a in ["striker", "aggressor"])
     has_defender = any(a in composition for a in ["defender", "goalie"])
 
     # Balance score: how balanced is the team across roles?

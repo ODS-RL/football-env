@@ -1,10 +1,10 @@
 # Team Composition Optimization Guide
 
-This guide explains how to find optimal team compositions and avoid issues like clustering (4x Messi problem).
+This guide explains how to find optimal team compositions and avoid issues like clustering (e.g. four aggressors chasing the same ball).
 
 ## The Problem
 
-When you use multiple agents of the same type (especially aggressive ball-chasers like Messi), they can cluster around the ball, blocking each other and reducing effectiveness. This happens because:
+When you use multiple agents of the same type (especially aggressive ball-chasers like Aggressor), they can cluster around the ball, blocking each other and reducing effectiveness. This happens because:
 
 1. **No coordination**: Agents don't communicate or coordinate
 2. **Similar behavior**: Identical agents make identical decisions
@@ -38,8 +38,8 @@ python tournament.py --players 2 --preset common --matches 5 --ticks 2000
 Focus on agents you're interested in:
 
 ```bash
-# Test compositions with Messi, Goalie, Striker, Defender
-python tournament.py --players 2 --agents messi,goalie,striker,defender --matches 3
+# Test compositions with Aggressor, Goalie, Striker, Defender
+python tournament.py --players 2 --agents aggressor,goalie,striker,defender --matches 3
 ```
 
 ### 3. Save and Analyze Results
@@ -58,11 +58,11 @@ python analyze_team.py --results results.json --top 15
 
 ### `--preset common`
 Balanced set of effective agents:
-- goalie, striker, defender, midfielder, messi
+- goalie, striker, defender, midfielder
 
 ### `--preset competitive`
 Extended competitive set:
-- goalie, striker, defender, messi, interceptor, aggressor
+- goalie, striker, defender, interceptor, aggressor
 
 ### `--preset all`
 All available agent types (generates many combinations)
@@ -120,24 +120,24 @@ python analyze_team.py --results results_2v2.json --top 10
 
 # 3. Test top composition against others
 # (use the winning composition from step 2)
-python main.py --agents goalie,messi,striker,defender --ticks 3000
+python main.py --agents goalie,aggressor,striker,defender --ticks 3000
 ```
 
-### Testing Messi Combinations
+### Testing Aggressor Combinations
 
 ```bash
-# Find best Messi pairings
-python tournament.py --players 2 --agents messi,goalie,striker,defender,midfielder --matches 4 --output messi_test.json
+# Find best Aggressor pairings
+python tournament.py --players 2 --agents aggressor,goalie,striker,defender,midfielder --matches 4 --output aggressor_test.json
 
-# Analyze what works best with Messi
-python analyze_team.py --results messi_test.json
+# Analyze what works best with Aggressor
+python analyze_team.py --results aggressor_test.json
 ```
 
 ### Comparing Two Specific Teams
 
 ```bash
-# Compare Messi+Goalie vs Striker+Defender
-python analyze_team.py --compare "messi,goalie" "striker,defender"
+# Compare Aggressor+Goalie vs Striker+Defender
+python analyze_team.py --compare "aggressor,goalie" "striker,defender"
 ```
 
 ### Testing 3v3 Compositions
@@ -186,7 +186,7 @@ python analyze_team.py --results 3v3_results.json --top 20
 
 ### General Principles
 
-1. **Avoid duplicate aggressive agents**: Multiple Messi/Aggressor/Striker agents will cluster
+1. **Avoid duplicate aggressive agents**: Multiple Aggressor/Striker/Chaser agents will cluster
 2. **Include a goalie**: Usually provides defensive stability
 3. **Balance roles**: Mix defensive, midfield, and offensive agents
 4. **Consider synergy**: Some combinations work better together
@@ -200,7 +200,7 @@ python main.py --agents goalie,midfielder,goalie,midfielder
 
 **Aggressive**:
 ```bash
-python main.py --agents goalie,messi,goalie,striker
+python main.py --agents goalie,aggressor,goalie,striker
 ```
 
 **Defensive**:
@@ -210,7 +210,7 @@ python main.py --agents goalie,defender,goalie,defender
 
 **Mixed**:
 ```bash
-python main.py --agents goalie,striker,defender,messi
+python main.py --agents goalie,striker,defender,aggressor
 ```
 
 ### For Larger Teams (3v3+)
@@ -239,7 +239,7 @@ After finding optimal compositions, you might want to improve your agents:
 python tournament.py --players 2 --preset common --matches 3
 
 # Thorough 2v2 test with specific agents
-python tournament.py --players 2 --agents messi,goalie,striker,defender,midfielder --matches 5 --output results.json
+python tournament.py --players 2 --agents aggressor,goalie,striker,defender,midfielder --matches 5 --output results.json
 
 # Analyze results
 python analyze_team.py --results results.json
@@ -248,10 +248,10 @@ python analyze_team.py --results results.json
 python main.py --agents [WINNER_COMPOSITION] --scale 1.5
 
 # Compare two teams
-python analyze_team.py --compare "messi,goalie" "striker,defender"
+python analyze_team.py --compare "aggressor,goalie" "striker,defender"
 
 # Analyze single composition
-python analyze_team.py --analyze "messi,striker"
+python analyze_team.py --analyze "aggressor,striker"
 ```
 
 ---

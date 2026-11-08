@@ -16,48 +16,21 @@ import sys
 from game.config import GameConfig
 from game.engine import Game
 from agents.base import BaseAgent
-from agents.random_agent import (
-    RandomAgent, ChaserAgent, GoalieAgent,
-    StrikerAgent, DefenderAgent, InterceptorAgent,
-    MidfielderAgent, AggressorAgent, WingerAgent,
-)
-try:
-    from agents.messi_agent import MessiAgent
-except ImportError:
-    MessiAgent = None
+from agents.random_agent import AGENT_CLASSES
 
 
-# Agent class mapping
-AGENT_CLASSES = {
-    "random": RandomAgent,
-    "chaser": ChaserAgent,
-    "goalie": GoalieAgent,
-    "striker": StrikerAgent,
-    "defender": DefenderAgent,
-    "interceptor": InterceptorAgent,
-    "midfielder": MidfielderAgent,
-    "aggressor": AggressorAgent,
-    "winger": WingerAgent,
+PRESETS = {
+    "common": ["goalie", "striker", "defender", "midfielder"],
+    "competitive": ["goalie", "striker", "defender", "interceptor", "aggressor"],
+    "all": list(AGENT_CLASSES.keys()),
 }
-
-if MessiAgent is not None:
-    AGENT_CLASSES["messi"] = MessiAgent
 
 
 def get_preset_agent_types(preset: str) -> list[str]:
-    """Return agent types for a named preset, filtered by availability."""
-    presets = {
-        "common": ["goalie", "striker", "defender", "midfielder", "messi"],
-        "competitive": ["goalie", "striker", "defender", "messi", "interceptor", "aggressor"],
-        "all": list(AGENT_CLASSES.keys()),
-    }
-    if preset not in presets:
+    """Return agent types for a named preset."""
+    if preset not in PRESETS:
         raise ValueError(f"Unknown preset: {preset}")
-
-    selected = [agent for agent in presets[preset] if agent in AGENT_CLASSES]
-    if not selected:
-        raise ValueError(f"Preset '{preset}' has no available agent types")
-    return selected
+    return list(PRESETS[preset])
 
 
 @dataclass
@@ -349,13 +322,13 @@ Examples:
   python tournament.py --players 2 --preset common
 
   # Test all 3v3 combinations with specific agents
-  python tournament.py --players 3 --agents goalie,striker,defender,messi
+  python tournament.py --players 3 --agents goalie,striker,defender,aggressor
 
   # Quick test with fewer matches
   python tournament.py --players 2 --preset common --matches 2 --ticks 1000
 
   # Generate custom compositions and save results
-  python tournament.py --players 2 --agents messi,goalie,striker --max-teams 20 --output results.json
+  python tournament.py --players 2 --agents aggressor,goalie,striker --max-teams 20 --output results.json
         """,
     )
 

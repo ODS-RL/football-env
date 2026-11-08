@@ -132,7 +132,7 @@ python quick_tournament.py --players 6 --preset competitive \
 
 # Or limit agent types
 python quick_tournament.py --players 6 \
-  --agents goalie,striker,defender,messi \
+  --agents goalie,striker,defender,aggressor \
   --sample 50 \
   --fast
 ```
@@ -241,7 +241,7 @@ Even with 1.29% sample, you get meaningful results because:
 ```bash
 # Reduce search space by limiting agent types
 python quick_tournament.py --players 5 \
-  --agents messi,goalie,striker,defender \
+  --agents aggressor,goalie,striker,defender \
   --sample 100 \
   --fast
 ```

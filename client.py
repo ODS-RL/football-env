@@ -20,11 +20,7 @@ from typing import Optional
 import websockets
 
 from agents.base import Action
-from agents.random_agent import (
-    RandomAgent, ChaserAgent, GoalieAgent,
-    StrikerAgent, DefenderAgent, InterceptorAgent,
-    MidfielderAgent, AggressorAgent, WingerAgent,
-)
+from agents.random_agent import AGENT_CLASSES, ChaserAgent
 from game.config import GameConfig
 from game.state import GameState
 from network.protocol import (
@@ -40,20 +36,6 @@ try:
     import pygame
 except ImportError:
     pygame = None
-
-
-# Agent type mapping
-AGENT_CLASSES = {
-    "random": RandomAgent,
-    "chaser": ChaserAgent,
-    "goalie": GoalieAgent,
-    "striker": StrikerAgent,
-    "defender": DefenderAgent,
-    "interceptor": InterceptorAgent,
-    "midfielder": MidfielderAgent,
-    "aggressor": AggressorAgent,
-    "winger": WingerAgent,
-}
 
 
 class KeyboardClient:
@@ -314,8 +296,8 @@ Examples:
   python client.py 192.168.1.50 --agent goalie  # Connect to remote server
   python client.py localhost --keyboard          # Manual keyboard control
 
-Available agents: random, chaser, goalie, striker, defender, interceptor, midfielder, aggressor, winger
-        """,
+Available agents: {agents}
+        """.format(agents=", ".join(AGENT_CLASSES)),
     )
 
     parser.add_argument(

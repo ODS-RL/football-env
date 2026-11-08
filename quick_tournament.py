@@ -136,7 +136,7 @@ Examples:
   python quick_tournament.py --players 4 --preset common --sample 50 --strategy diverse
 
   # Quick 3v3 test
-  python quick_tournament.py --players 3 --agents messi,goalie,striker --sample 30 --fast
+  python quick_tournament.py --players 3 --agents aggressor,goalie,striker --sample 30 --fast
         """,
     )
 

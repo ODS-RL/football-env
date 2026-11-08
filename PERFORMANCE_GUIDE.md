@@ -132,7 +132,7 @@ Instead of testing all agents, focus on specific ones:
 ```bash
 # Only test 4 agent types (much fewer combinations)
 python quick_tournament.py --players 5 \
-  --agents goalie,striker,defender,messi \
+  --agents goalie,striker,defender,aggressor \
   --sample 40 \
   --fast
 ```
@@ -194,12 +194,12 @@ python quick_tournament.py --players 5 --preset competitive \
   --output final_results.json
 ```
 
-### Testing Messi Specifically
+### Testing One Agent Specifically
 
 ```bash
-# Focus on teams with Messi
+# Focus on teams with Aggressor
 python quick_tournament.py --players 5 \
-  --agents messi,goalie,striker,defender,midfielder \
+  --agents aggressor,goalie,striker,defender,midfielder \
   --sample 40 \
   --fast
 ```
@@ -266,7 +266,7 @@ python quick_tournament.py --players 5 --preset competitive --sample 40 --fast
 python quick_tournament.py --players 5 --preset competitive --sample 100 --matches 3
 
 # FOCUSED - Test specific agents only
-python quick_tournament.py --players 5 --agents goalie,striker,defender,messi --sample 40 --fast
+python quick_tournament.py --players 5 --agents goalie,striker,defender,aggressor --sample 40 --fast
 
 # STRICT - No duplicate agents
 python quick_tournament.py --players 5 --preset competitive --sample 40 --no-duplicates --fast

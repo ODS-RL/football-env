@@ -413,3 +413,18 @@ class WingerAgent(BaseAgent):
         kick = ball_dist <= self.kick_range and me.can_kick()
 
         return Action(ax=ax, ay=ay, kick=kick)
+
+
+# Registry of selectable agent types (name used on the command line -> class).
+# Register new agents here; main.py, tournament.py and client.py all use it.
+AGENT_CLASSES = {
+    "random": RandomAgent,
+    "chaser": ChaserAgent,
+    "goalie": GoalieAgent,
+    "striker": StrikerAgent,
+    "defender": DefenderAgent,
+    "interceptor": InterceptorAgent,
+    "midfielder": MidfielderAgent,
+    "aggressor": AggressorAgent,
+    "winger": WingerAgent,
+}
