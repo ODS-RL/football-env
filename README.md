@@ -61,7 +61,14 @@ python main.py --no-viz --seed 42           # Reproducible game
 
 ## Agents
 
-Each agent type has a distinct behavior and playing style:
+Each agent type has a distinct behavior and playing style.
+
+All agents except RandomAgent share a common base (`PlayerAgent`) that:
+- brakes into its target position instead of overshooting and oscillating around it
+- predicts the ball's path (friction and wall bounces) and goes to where it can meet it
+- circles around the ball to get behind it, instead of running through it
+- only kicks when the kick sends the ball somewhere useful: never toward its own goal or straight into a nearby opponent. The engine kicks along the player → ball line, so positioning decides where a kick goes
+- deep in its own half, approaches from the goal side and clears the ball away from goal
 
 ### RandomAgent
 - **Behavior**: Takes completely random actions
@@ -69,44 +76,44 @@ Each agent type has a distinct behavior and playing style:
 - **Strategy**: Moves in random directions with random acceleration magnitudes
 
 ### ChaserAgent
-- **Behavior**: Directly chases the ball and kicks when close
-- **Use case**: Simple but effective ball pursuit
-- **Strategy**: Calculates vector to ball, moves at max acceleration toward it with slight noise, kicks when within range (40 units)
+- **Behavior**: Chases the ball and drives it toward goal
+- **Use case**: Simple ball pursuit
+- **Strategy**: Always goes for the ball and aims at the centre of the goal, with slight noise in its movement
 
 ### GoalieAgent
-- **Behavior**: Stays near own goal and blocks shots
+- **Behavior**: Stays in front of its goal, blocks shots and clears
 - **Use case**: Defensive goalkeeper role
-- **Strategy**: Positions at fixed X near goal line, tracks ball's Y position (clamped to goal area), kicks away when ball comes close
+- **Strategy**: Stands on the line between ball and goal centre and steps into the path of balls heading for goal. Rushes out to clear balls near goal when it is the first teammate to reach them
 
 ### StrikerAgent
-- **Behavior**: Aggressive forward that pushes toward opponent's goal
+- **Behavior**: Forward that takes the ball to goal and shoots
 - **Use case**: Offensive scoring role
-- **Strategy**: When far from ball, chases directly. When close (<100 units), positions behind the ball relative to opponent's goal to set up shots
+- **Strategy**: Approaches from behind the ball and aims at the part of the goal mouth with the clearest line. Waits upfield as an outlet while teammates deal with balls deep in its own half
 
 ### DefenderAgent
 - **Behavior**: Stays between ball and own goal
 - **Use case**: Defensive protection role
-- **Strategy**: Positions 30% of the way from ball to own goal, stays in defensive third of field (doesn't push forward past 40% line), clears ball when close
+- **Strategy**: Holds a spot on the ball–goal line inside its own half; tackles and clears when the ball enters its half and it is the closest teammate or the ball is near
 
 ### InterceptorAgent
-- **Behavior**: Predicts ball movement and intercepts
+- **Behavior**: Reads the ball's path
 - **Use case**: Proactive ball recovery
-- **Strategy**: Calculates predicted ball position 20 ticks ahead using ball velocity, moves to intercept point rather than current ball position
+- **Strategy**: Attacks the predicted ball position. When an opponent will get there first, it cuts off the lane between the ball and its own goal instead
 
 ### MidfielderAgent
 - **Behavior**: Balanced support for attack and defense
 - **Use case**: All-around midfield role
-- **Strategy**: Tracks ball position but stays in midfield zone (30-70% of field). Pushes forward when ball is in attacking half, falls back to center when defending
+- **Strategy**: Wins balls in the middle of the pitch or when it is the closest teammate. Otherwise drops back to support the defence, or pushes up on the far side for rebounds
 
 ### AggressorAgent
-- **Behavior**: Very aggressive ball chaser at maximum speed
+- **Behavior**: Relentless ball chaser
 - **Use case**: High-pressure play style
-- **Strategy**: Direct chase with no positioning subtlety - always max acceleration toward ball, extended kick range (45 units), no noise in movement
+- **Strategy**: Always goes for the ball, loops tightly around it and kicks at any chance that sends the ball forward
 
 ### WingerAgent
-- **Behavior**: Fast flank player that stays wide
-- **Use case**: Wing attack and crossing plays
-- **Strategy**: Positions on top or bottom flank (20% or 80% of field height based on player_id). Stays ahead of ball position, goes for ball when it comes within 150 units
+- **Behavior**: Flank player that stays wide
+- **Use case**: Wing attack
+- **Strategy**: Holds the top or bottom flank (20% or 80% of field height, by player_id) ahead of the ball and attacks when the ball comes within 150 units or it is the closest teammate
 
 ## Tactics (Strategy Presets)
 

@@ -68,7 +68,7 @@ uv run python client.py localhost --keyboard
 
 ### Agents (`agents/`)
 - **base.py**: Abstract BaseAgent with Action dataclass (acceleration + kick, clamped/sanitized), per-agent `self.rng`, helper methods (get_my_player, get_teammates, get_opponents)
-- **random_agent.py**: 9 agent types - RandomAgent, ChaserAgent, GoalieAgent, StrikerAgent, DefenderAgent, InterceptorAgent, MidfielderAgent, AggressorAgent, WingerAgent - and the `AGENT_CLASSES` registry used by main.py, tournament.py, client.py and analyze_team.py
+- **random_agent.py**: 9 agent types - RandomAgent, ChaserAgent, GoalieAgent, StrikerAgent, DefenderAgent, InterceptorAgent, MidfielderAgent, AggressorAgent, WingerAgent - and the `AGENT_CLASSES` registry used by main.py, tournament.py, client.py and analyze_team.py. All but RandomAgent extend `PlayerAgent`, which provides arrival steering (`steer`), ball prediction (`predict_ball`, `intercept`), approaching the ball from behind (`attack`) and safe kicking (`kick_score` rejects kicks toward the agent's own goal or into a nearby opponent). Kicks always go along the player -> ball line, so positioning decides where they go
 - **keyboard_agent.py**: Human control for local games, with an AI fallback for inactive players
 
 ### Agent Presets
@@ -89,7 +89,7 @@ uv run python client.py localhost --keyboard
 
 ## Adding New Agents
 
-1. Create class in `agents/random_agent.py` extending BaseAgent (call `super().__init__`)
+1. Create class in `agents/random_agent.py` extending BaseAgent, or PlayerAgent for the movement/kicking helpers (call `super().__init__`)
 2. Implement `get_action(game_state)` returning Action; use `self.rng` (not the `random` module) so seeded runs stay reproducible
 3. Register in `AGENT_CLASSES` at the bottom of `agents/random_agent.py`
 4. Optionally add a role profile to `AGENT_ROLES` in `analyze_team.py` (unknown agents default to evenly split roles)
