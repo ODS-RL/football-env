@@ -17,6 +17,7 @@ from typing import Any, Dict, List, Optional
 import websockets
 
 from game.config import GameConfig
+from game.environment import add_env_seed_argument, apply_env_seed
 from game.engine import Game
 from game.state import GameStatus
 from agents.random_agent import ChaserAgent
@@ -102,7 +103,7 @@ class GameServer:
 
         try:
             # Send config and assignment
-            await websocket.send(encode_config(self.config))
+            await websocket.send(encode_config(self.config.for_agents()))
             await websocket.send(encode_assign(team_id, player_id))
 
             # Check if we should start the game
@@ -317,6 +318,7 @@ Examples:
         help="Disable visualization (default)",
     )
 
+    add_env_seed_argument(parser)
     args = parser.parse_args()
 
     config = GameConfig(
@@ -325,6 +327,7 @@ Examples:
         win_score=args.win_score,
         ticks_per_second=args.tick_rate,
     )
+    config = apply_env_seed(config, args.env_seed)
 
     server = GameServer(
         config,

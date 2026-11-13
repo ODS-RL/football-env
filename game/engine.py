@@ -34,6 +34,11 @@ class Game:
             agent_rng = getattr(agent, "rng", None)
             if isinstance(agent_rng, random.Random):
                 agent_rng.seed(self.rng.getrandbits(64))
+            # Each agent gets its own copy of the match parameters, so one
+            # agent mutating it can't change the physics or other agents' view
+            set_config = getattr(agent, "set_config", None)
+            if set_config is not None:
+                set_config(config.for_agents())
 
         # Initialize game state
         self.players: List[Player] = []

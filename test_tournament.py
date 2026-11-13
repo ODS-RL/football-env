@@ -53,7 +53,7 @@ def test_seeded_tournament_is_reproducible():
 
 def test_sides_alternate_between_matches(monkeypatch):
     """Each composition plays on the left in half of an even pairing."""
-    def left_side_wins(team0_comp, team1_comp, ticks, win_score, seed=None):
+    def left_side_wins(team0_comp, team1_comp, ticks, win_score, seed=None, base_config=None):
         return MatchResult(team0_comp, team1_comp, 1, 0, 10, winner=0)
 
     monkeypatch.setattr(tournament, "play_match", left_side_wins)
@@ -79,7 +79,7 @@ def test_sides_balanced_with_one_match_per_pairing(monkeypatch, num_teams):
     """With odd match counts every composition still plays left about half the time."""
     from collections import Counter
 
-    def record(team0_comp, team1_comp, ticks, win_score, seed=None):
+    def record(team0_comp, team1_comp, ticks, win_score, seed=None, base_config=None):
         return MatchResult(team0_comp, team1_comp, 0, 0, 1, winner=-1)
 
     monkeypatch.setattr(tournament, "play_match", record)

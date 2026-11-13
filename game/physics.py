@@ -84,7 +84,8 @@ class Physics:
         field_h = self.config.field_height
         corner_r = self.config.corner_radius
         goal_depth = self.config.goal_width  # How deep the net goes
-        restitution = 0.8 if is_ball else 0.5
+        restitution = (self.config.ball_wall_restitution if is_ball
+                       else self.config.player_wall_restitution)
 
         # Goal area check for ball
         goal_top = field_h / 2 - self.config.goal_height / 2
@@ -330,7 +331,7 @@ class Physics:
                     player, player.radius,
                     ball, ball.radius,
                     player.mass, ball.mass,
-                    restitution=0.9
+                    restitution=self.config.ball_player_restitution
                 )
 
             # Resolve player-player collisions
@@ -340,7 +341,7 @@ class Physics:
                         p1, p1.radius,
                         p2, p2.radius,
                         p1.mass, p2.mass,
-                        restitution=0.5
+                        restitution=self.config.player_player_restitution
                     )
 
             # Final boundary enforcement

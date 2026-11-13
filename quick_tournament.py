@@ -9,6 +9,8 @@ large combination spaces efficiently.
 import argparse
 import random
 import sys
+from game.config import GameConfig
+from game.environment import add_env_seed_argument, apply_env_seed
 from tournament import (
     AGENT_CLASSES,
     generate_team_compositions,
@@ -221,11 +223,13 @@ Examples:
         type=int,
         help="Random seed for reproducible sampling and matches",
     )
+    add_env_seed_argument(parser)
 
     args = parser.parse_args()
 
     if args.seed is not None:
         random.seed(args.seed)
+    base_config = apply_env_seed(GameConfig(), args.env_seed)
 
     # Apply fast presets
     if args.fast:
@@ -307,6 +311,7 @@ Examples:
         win_score=args.win_score,
         verbose=True,
         seed=args.seed,
+        base_config=base_config,
     )
 
     # Display results
@@ -337,7 +342,7 @@ Examples:
 
     # Save if requested
     if args.output:
-        save_results(stats, results, args.output)
+        save_results(stats, results, args.output, config=base_config)
         print(f"\n💾 Full results saved to: {args.output}")
         print(f"   Analyze with: python analyze_team.py --results {args.output}")
 

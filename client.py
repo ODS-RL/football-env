@@ -162,6 +162,9 @@ class GameClient:
 
                             # Create agent now that we know our assignment
                             self.agent = self.create_agent(self.team_id, self.player_id)
+                            if self.agent and self.config:
+                                # Same physics the server plays (may be a rolled environment)
+                                self.agent.set_config(self.config.for_agents())
                             if self.keyboard:
                                 print("Keyboard control active: WASD=move, Space=kick, ESC=quit")
                                 # Highlight controlled player

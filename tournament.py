@@ -13,8 +13,10 @@ import random
 from dataclasses import dataclass, asdict
 from typing import List, Dict, Optional, Tuple
 import sys
+from dataclasses import replace
 
 from game.config import GameConfig
+from game.environment import ENV_FIELDS, add_env_seed_argument, apply_env_seed
 from game.engine import Game
 from agents.base import BaseAgent
 from agents.random_agent import AGENT_CLASSES
@@ -84,10 +86,15 @@ def play_match(
     ticks: int = 3000,
     win_score: int = 5,
     seed: Optional[int] = None,
+    base_config: Optional[GameConfig] = None,
 ) -> MatchResult:
-    """Play a single match between two team compositions."""
-    # Create config
-    config = GameConfig(
+    """Play a single match between two team compositions.
+
+    base_config supplies physics and geometry (e.g. a rolled environment);
+    team size, ticks, win score and seed come from the arguments.
+    """
+    config = replace(
+        base_config or GameConfig(),
         players_per_team=len(team0_comp),
         max_ticks=ticks,
         win_score=win_score,
@@ -171,6 +178,7 @@ def run_tournament(
     win_score: int = 5,
     verbose: bool = True,
     seed: Optional[int] = None,
+    base_config: Optional[GameConfig] = None,
 ) -> Tuple[Dict[Tuple[str, ...], TeamStats], List[MatchResult]]:
     """
     Run a round-robin tournament with all compositions.
@@ -186,6 +194,7 @@ def run_tournament(
         win_score: Score needed to win
         verbose: Print progress
         seed: Base seed; each match gets a seed derived from it (None = random)
+        base_config: Physics and geometry shared by every match (None = defaults)
 
     Returns:
         Tuple of (team_stats_dict, all_match_results)
@@ -230,7 +239,8 @@ def run_tournament(
 
                 # Play match
                 match_seed = seed_rng.getrandbits(32) if seed is not None else None
-                result = play_match(team0_comp, team1_comp, ticks, win_score, seed=match_seed)
+                result = play_match(team0_comp, team1_comp, ticks, win_score, seed=match_seed,
+                                    base_config=base_config)
                 all_results.append(result)
 
                 # Update stats
@@ -309,9 +319,15 @@ def save_results(
     stats: Dict[Tuple[str, ...], TeamStats],
     results: List[MatchResult],
     output_file: str,
+    config: Optional[GameConfig] = None,
 ):
-    """Save tournament results to JSON file."""
+    """Save tournament results to JSON file, with the environment they were played in."""
+    config = config or GameConfig()
     data = {
+        "environment": {
+            "env_seed": config.env_seed,
+            **{name: getattr(config, name) for name in ENV_FIELDS},
+        },
         "team_stats": [
             {
                 "composition": list(s.composition),
@@ -409,11 +425,13 @@ Examples:
         type=int,
         help="Random seed for reproducible sampling and matches",
     )
+    add_env_seed_argument(parser)
 
     args = parser.parse_args()
 
     if args.seed is not None:
         random.seed(args.seed)
+    base_config = apply_env_seed(GameConfig(), args.env_seed)
 
     # Determine agent types to use
     if args.agents:
@@ -450,6 +468,7 @@ Examples:
         win_score=args.win_score,
         verbose=True,
         seed=args.seed,
+        base_config=base_config,
     )
 
     # Display results
@@ -457,7 +476,7 @@ Examples:
 
     # Save if requested
     if args.output:
-        save_results(stats, results, args.output)
+        save_results(stats, results, args.output, config=base_config)
 
 
 if __name__ == "__main__":

@@ -11,6 +11,9 @@ Every agent except RandomAgent is built on PlayerAgent, which provides:
 
 The engine always kicks the ball along the player -> ball line, so where a
 kick goes is decided by where the player stands, not by the action.
+
+Physics constants come from ``self.config`` (the match's GameConfig), never
+from hardcoded values: physics and geometry can be re-rolled per competition.
 """
 import math
 from typing import TYPE_CHECKING, Optional, Tuple
@@ -18,20 +21,8 @@ from typing import TYPE_CHECKING, Optional, Tuple
 from .base import BaseAgent, Action
 
 if TYPE_CHECKING:
+    from game.config import GameConfig
     from game.state import GameState, PlayerState
-
-
-# Physics constants mirrored from GameConfig defaults (agents only see GameState)
-PLAYER_RADIUS = 20.0
-BALL_RADIUS = 10.0
-KICK_RANGE = 35.0
-KICK_POWER = 12.0
-MAX_ACCELERATION = 0.5
-PLAYER_FRICTION = 0.85
-BALL_FRICTION = 0.98
-CONTACT_DIST = PLAYER_RADIUS + BALL_RADIUS
-TOP_SPEED = MAX_ACCELERATION / (1 - PLAYER_FRICTION)  # ~3.3 units/tick at full acceleration
-BALL_REACH = KICK_POWER / (1 - BALL_FRICTION)  # Distance a kick from rest rolls (~600)
 
 
 def _norm(x: float, y: float) -> Tuple[float, float]:
@@ -60,7 +51,7 @@ class RandomAgent(BaseAgent):
     def get_action(self, state: 'GameState') -> Action:
         """Return random acceleration."""
         angle = self.rng.uniform(0, 2 * math.pi)
-        magnitude = self.rng.uniform(0, 0.5)
+        magnitude = self.rng.uniform(0, self.config.player_max_acceleration)
         return Action(
             ax=math.cos(angle) * magnitude,
             ay=math.sin(angle) * magnitude,
@@ -76,13 +67,37 @@ class PlayerAgent(BaseAgent):
     # Half-angle of the cone behind the ball from which the agent charges it;
     # outside the cone it circles around the ball first.
     approach_cone = math.radians(35)
-    orbit_radius = 45.0
+    # Clearance kept from the ball while circling it, as a fraction of the
+    # player + ball contact distance
+    orbit_gap = 0.5
 
     def __init__(self, team_id: int, player_id: int,
-                 max_acceleration: float = MAX_ACCELERATION, kick_range: float = KICK_RANGE):
+                 max_acceleration: Optional[float] = None, kick_range: Optional[float] = None):
+        # Optional handicaps; the game's own limits apply when lower or unset
+        self.acceleration_cap = max_acceleration
+        self.kick_range_cap = kick_range
         super().__init__(team_id, player_id)
-        self.max_acceleration = max_acceleration
-        self.kick_range = kick_range
+
+    def set_config(self, config: 'GameConfig') -> None:
+        super().set_config(config)
+        self.max_acceleration = config.player_max_acceleration
+        if self.acceleration_cap is not None:
+            self.max_acceleration = min(self.max_acceleration, self.acceleration_cap)
+        self.kick_range = config.kick_range
+        if self.kick_range_cap is not None:
+            self.kick_range = min(self.kick_range, self.kick_range_cap)
+        self.player_radius = config.player_radius
+        self.ball_radius = config.ball_radius
+        self.contact_dist = config.player_radius + config.ball_radius
+        self.kick_power = config.kick_power
+        self.player_friction = config.player_friction
+        self.ball_friction = config.ball_friction
+        # Distance per tick at full acceleration
+        self.top_speed = min(config.player_max_speed,
+                             self.max_acceleration / (1 - config.player_friction))
+        # Distance a kick from rest rolls
+        self.ball_reach = config.kick_power / (1 - config.ball_friction)
+        self.orbit_radius = self.contact_dist * (1 + self.orbit_gap)
 
     # --- Geometry -----------------------------------------------------------
 
@@ -113,16 +128,20 @@ class PlayerAgent(BaseAgent):
         With arrive=True the agent slows down and stops on the target instead
         of overshooting it; otherwise it runs through at full speed.
         """
-        tx = _clamp(tx, PLAYER_RADIUS, state.field_width - PLAYER_RADIUS)
-        ty = _clamp(ty, PLAYER_RADIUS, state.field_height - PLAYER_RADIUS)
+        r = self.player_radius
+        tx = _clamp(tx, r, state.field_width - r)
+        ty = _clamp(ty, r, state.field_height - r)
         dx, dy = tx - me.x, ty - me.y
         dist = math.hypot(dx, dy)
         if arrive:
             if dist < 1.0 and math.hypot(me.vx, me.vy) < 0.3:
                 return 0.0, 0.0
-            speed = min(2 * TOP_SPEED, dist * 0.3)
+            # Target speed proportional to distance. Braking (acceleration plus
+            # friction) can follow that down to zero as long as the gain is at
+            # most 2 * (1 - friction); higher overshoots.
+            speed = min(2 * self.top_speed, dist * 2 * (1 - self.player_friction))
         else:
-            speed = 2 * TOP_SPEED
+            speed = 2 * self.top_speed
         ux, uy = _norm(dx, dy)
         # The next move uses velocity + acceleration, so steer the velocity
         # itself (this also cancels sideways drift).
@@ -137,15 +156,25 @@ class PlayerAgent(BaseAgent):
     def predict_ball(self, state: 'GameState', ticks: int) -> Tuple[float, float, float, float]:
         """Ball (x, y, vx, vy) after `ticks` ticks, with friction and wall bounces."""
         ball = state.ball
-        decay = BALL_FRICTION ** ticks
-        travel = (1 - decay) / (1 - BALL_FRICTION)
-        x, sx = _fold(ball.x + ball.vx * travel, BALL_RADIUS, state.field_width - BALL_RADIUS)
-        y, sy = _fold(ball.y + ball.vy * travel, BALL_RADIUS, state.field_height - BALL_RADIUS)
+        decay = self.ball_friction ** ticks
+        travel = (1 - decay) / (1 - self.ball_friction)
+        r = self.ball_radius
+        x, sx = _fold(ball.x + ball.vx * travel, r, state.field_width - r)
+        y, sy = _fold(ball.y + ball.vy * travel, r, state.field_height - r)
         return x, y, ball.vx * decay * sx, ball.vy * decay * sy
 
-    @staticmethod
-    def ticks_to_reach(p: 'PlayerState', x: float, y: float) -> float:
-        return max(0.0, math.hypot(x - p.x, y - p.y) - CONTACT_DIST) / TOP_SPEED
+    def ticks_to_reach(self, p: 'PlayerState', x: float, y: float) -> float:
+        """Rough ticks for player p to touch a ball at (x, y), including speeding up."""
+        dx, dy = x - p.x, y - p.y
+        dist = math.hypot(dx, dy)
+        gap = dist - self.contact_dist
+        if gap <= 0:
+            return 0.0
+        # Speeding up takes about one velocity time constant, less when
+        # already moving that way (and more when moving away)
+        toward = (p.vx * dx + p.vy * dy) / dist
+        ramp = 0.7 / (1 - self.player_friction) * _clamp(1 - toward / self.top_speed, 0.0, 2.0)
+        return gap / self.top_speed + ramp
 
     def intercept(self, state: 'GameState', p: 'PlayerState',
                   horizon: int = 90) -> Tuple[float, float, float, float, int]:
@@ -179,8 +208,23 @@ class PlayerAgent(BaseAgent):
         t = (goal_x - x) / dx
         if t <= 0 or t > max_dist:
             return False
-        cross_y, _ = _fold(y + dy * t, BALL_RADIUS, state.field_height - BALL_RADIUS)
+        cross_y, _ = _fold(y + dy * t, self.ball_radius, state.field_height - self.ball_radius)
         return abs(cross_y - state.field_height / 2) <= state.goal_height / 2 + margin
+
+    def ball_pinned(self, state: 'GameState') -> bool:
+        """Whether the ball is (nearly) stopped against a wall or corner."""
+        b = state.ball
+        if math.hypot(b.vx, b.vy) > 0.5:
+            return False
+        w, h = state.field_width, state.field_height
+        m = self.ball_radius + 2
+        if b.x < m or b.x > w - m or b.y < m or b.y > h - m:
+            return True
+        # Rounded corners: near the arc instead of a straight wall
+        c = self.config.corner_radius
+        cx = c if b.x < c else w - c if b.x > w - c else None
+        cy = c if b.y < c else h - c if b.y > h - c else None
+        return cx is not None and cy is not None and math.hypot(b.x - cx, b.y - cy) > c - m
 
     def defending(self, state: 'GameState', x: float) -> bool:
         """Whether a ball at x is deep enough in our half to clear rather than build up."""
@@ -193,30 +237,33 @@ class PlayerAgent(BaseAgent):
         ux, uy = _norm(rx + self.forward, ry)
         return bx + ux * 200, by + uy * 200
 
-    def kick_score(self, state: 'GameState', me: 'PlayerState') -> Optional[float]:
+    def kick_score(self, state: 'GameState', me: 'PlayerState',
+                   allow_blocked: bool = False) -> Optional[float]:
         """Value of kicking now, or None if the ball is out of range or the kick is unsafe.
 
         2.0 for a shot on goal, otherwise how far (-1..1) the resulting ball
         direction points upfield; deep in our own half pointing away from our
-        goal counts too.
+        goal counts too. allow_blocked permits kicking into a nearby opponent,
+        which breaks up a ball pinned against a wall between two players.
         """
         ball = state.ball
         dx, dy = ball.x - me.x, ball.y - me.y
         dist = math.hypot(dx, dy)
-        if dist > min(self.kick_range, KICK_RANGE) or dist < 1e-6 or not me.can_kick():
+        if dist > self.kick_range or dist < 1e-6 or not me.can_kick():
             return None
         nx, ny = dx / dist, dy / dist
-        ux, uy = _norm(ball.vx + nx * KICK_POWER, ball.vy + ny * KICK_POWER)
-        if self.heads_into_goal(state, ball.x, ball.y, ux, uy, self.own_goal(state)[0], margin=25):
+        ux, uy = _norm(ball.vx + nx * self.kick_power, ball.vy + ny * self.kick_power)
+        if self.heads_into_goal(state, ball.x, ball.y, ux, uy, self.own_goal(state)[0],
+                                margin=2.5 * self.ball_radius):
             return None
         # A kick straight into a nearby opponent just rebounds
-        for o in self.get_opponents(state):
+        for o in ([] if allow_blocked else self.get_opponents(state)):
             ox, oy = o.x - ball.x, o.y - ball.y
             along = ox * ux + oy * uy
-            if 0 < along < 90 and abs(ox * uy - oy * ux) < PLAYER_RADIUS + BALL_RADIUS - 4:
+            if 0 < along < 3 * self.contact_dist and abs(ox * uy - oy * ux) < self.contact_dist - 4:
                 return None
         if self.heads_into_goal(state, ball.x, ball.y, ux, uy, self.opp_goal(state)[0],
-                                margin=-BALL_RADIUS, max_dist=BALL_REACH * 0.9):
+                                margin=-self.ball_radius, max_dist=self.ball_reach * 0.9):
             return 2.0
         score = ux * self.forward
         if self.defending(state, ball.x):
@@ -225,14 +272,15 @@ class PlayerAgent(BaseAgent):
             score = max(score, ux * rx + uy * ry)
         return score
 
-    def wants_kick(self, state: 'GameState', me: 'PlayerState', threshold: float) -> bool:
-        score = self.kick_score(state, me)
+    def wants_kick(self, state: 'GameState', me: 'PlayerState', threshold: float,
+                   allow_blocked: bool = False) -> bool:
+        score = self.kick_score(state, me, allow_blocked)
         return score is not None and score >= threshold
 
     def shot_target(self, state: 'GameState', bx: float, by: float) -> Tuple[float, float]:
         """Point in the opponent goal mouth with the clearest line from (bx, by)."""
         gx, gy = self.opp_goal(state)
-        spread = state.goal_height / 2 - BALL_RADIUS - 8
+        spread = state.goal_height / 2 - self.ball_radius - 8
         opponents = self.get_opponents(state)
         best, best_clear = (gx, gy), -1.0
         for ty in (gy, gy - spread, gy + spread):
@@ -274,7 +322,7 @@ class PlayerAgent(BaseAgent):
         stuck = False
         if abs(theta) <= self.approach_cone:
             # Converge onto the line behind the ball, then run through it
-            k = _clamp(-along * 0.5 - 5, 0.0, 60.0)
+            k = _clamp(-along * 0.5 - 5, 0.0, 2 * self.contact_dist)
             tx, ty = bx - nx * k, by - ny * k
             arrive = False
         else:
@@ -285,21 +333,23 @@ class PlayerAgent(BaseAgent):
                     # Pinned near our goal: block the way in rather than push it in
                     gx, gy = self.own_goal(state)
                     ux, uy = _norm(gx - bx, gy - by)
-                    tx, ty = bx + ux * CONTACT_DIST, by + uy * CONTACT_DIST
+                    tx, ty = bx + ux * self.contact_dist, by + uy * self.contact_dist
                     arrive = True
                 else:
                     tx, ty = bx, by
 
         ax, ay = self.steer(state, me, tx, ty, arrive=arrive)
-        # Near walls the ideal spot may be unreachable: accept rougher kicks
-        kick = self.wants_kick(state, me, threshold - (0.6 if stuck else 0.0))
+        # Near walls the ideal spot may be unreachable: accept rougher kicks.
+        # A ball pinned against a wall may need kicking into the opponent on
+        # its other side, or neither player ever moves it.
+        kick = self.wants_kick(state, me, threshold - (0.6 if stuck else 0.0),
+                               allow_blocked=stuck or self.ball_pinned(state))
         return Action(ax=ax, ay=ay, kick=kick)
 
-    @staticmethod
-    def _contact_normal(bvx: float, bvy: float, ax: float, ay: float) -> Tuple[float, float]:
+    def _contact_normal(self, bvx: float, bvy: float, ax: float, ay: float) -> Tuple[float, float]:
         """Kick direction that sends a ball moving at (bvx, bvy) along (ax, ay)."""
         p = ax * bvx + ay * bvy
-        disc = p * p - (bvx * bvx + bvy * bvy) + KICK_POWER * KICK_POWER
+        disc = p * p - (bvx * bvx + bvy * bvy) + self.kick_power * self.kick_power
         if disc < 0:
             return ax, ay
         k = p + math.sqrt(disc)
@@ -309,7 +359,7 @@ class PlayerAgent(BaseAgent):
                         theta: float) -> Tuple[float, float, bool]:
         """Next point on a circle around the ball, moving toward its back side."""
         r = self.orbit_radius
-        lo, hi_x, hi_y = PLAYER_RADIUS, state.field_width - PLAYER_RADIUS, state.field_height - PLAYER_RADIUS
+        lo, hi_x, hi_y = self.player_radius, state.field_width - self.player_radius, state.field_height - self.player_radius
 
         def point(phi: float) -> Tuple[float, float, float]:
             x = bx - nx * r * math.cos(phi) - ny * r * math.sin(phi)
@@ -339,19 +389,24 @@ class PlayerAgent(BaseAgent):
 
 
 class ChaserAgent(PlayerAgent):
-    """Simple agent that chases the ball and kicks it toward goal, with noisy movement."""
+    """Simple agent that chases the ball and kicks it toward goal, with noisy movement.
 
-    def __init__(self, team_id: int, player_id: int, max_acceleration: float = MAX_ACCELERATION,
-                 noise: float = 0.15, kick_range: float = KICK_RANGE):
+    noise is the size of the random acceleration added each tick, as a
+    fraction of the max acceleration.
+    """
+
+    def __init__(self, team_id: int, player_id: int, max_acceleration: Optional[float] = None,
+                 noise: float = 0.3, kick_range: Optional[float] = None):
         super().__init__(team_id, player_id, max_acceleration, kick_range)
         self.noise = noise
 
     def get_action(self, state: 'GameState') -> Action:
         me = self.get_my_player(state)
         action = self.attack(state, me, aim=self.opp_goal(state))
+        n = self.noise * self.max_acceleration
         return Action(
-            ax=action.ax + self.rng.uniform(-self.noise, self.noise),
-            ay=action.ay + self.rng.uniform(-self.noise, self.noise),
+            ax=action.ax + self.rng.uniform(-n, n),
+            ay=action.ay + self.rng.uniform(-n, n),
             kick=action.kick,
         )
 
@@ -361,8 +416,8 @@ class GoalieAgent(PlayerAgent):
 
     kick_threshold = 0.1  # Any clearance away from goal will do
 
-    def __init__(self, team_id: int, player_id: int, max_acceleration: float = MAX_ACCELERATION,
-                 noise: float = 0.0, kick_range: float = KICK_RANGE):
+    def __init__(self, team_id: int, player_id: int, max_acceleration: Optional[float] = None,
+                 noise: float = 0.0, kick_range: Optional[float] = None):
         super().__init__(team_id, player_id, max_acceleration, kick_range)
         self.noise = noise
         self.clearing = False
@@ -378,10 +433,11 @@ class GoalieAgent(PlayerAgent):
 
         # Rush out to clear balls near goal if nobody else is closer; the
         # looser exit condition stops it flip-flopping between the two modes
+        w = state.field_width
         if self.clearing:
-            self.clearing = ball_dist < 230 and self.first_to_ball(state, me, margin=0)
+            self.clearing = ball_dist < 0.23 * w and self.first_to_ball(state, me, margin=0)
         else:
-            self.clearing = ball_dist < 170 and self.first_to_ball(state, me, margin=8)
+            self.clearing = ball_dist < 0.17 * w and self.first_to_ball(state, me, margin=8)
 
         if self.clearing:
             bx, by, _, _, _ = self.intercept(state, me, 30)
@@ -392,29 +448,30 @@ class GoalieAgent(PlayerAgent):
             ax, ay = self.steer(state, me, tx, ty)
             action = self.opportunistic_kick(state, me, ax, ay)
 
-        if self.noise:
-            return Action(ax=action.ax + self.rng.uniform(-self.noise, self.noise),
-                          ay=action.ay + self.rng.uniform(-self.noise, self.noise), kick=action.kick)
+        if self.noise:  # Fraction of max acceleration, as for ChaserAgent
+            n = self.noise * self.max_acceleration
+            return Action(ax=action.ax + self.rng.uniform(-n, n),
+                          ay=action.ay + self.rng.uniform(-n, n), kick=action.kick)
         return action
 
     def _guard_position(self, state: 'GameState') -> Tuple[float, float]:
         ball = state.ball
         gx, gy = self.own_goal(state)
         half = state.goal_height / 2
-        line_x = gx + self.forward * (PLAYER_RADIUS + 4)
+        line_x = gx + self.forward * (self.player_radius + 4)
 
         # Ball heading for goal: get in its path
         if ball.vx * self.forward < -0.5 and self.heads_into_goal(
-                state, ball.x, ball.y, ball.vx, ball.vy, gx, margin=PLAYER_RADIUS):
+                state, ball.x, ball.y, ball.vx, ball.vy, gx, margin=self.player_radius):
             t = (gx - ball.x) / ball.vx
-            cross_y, _ = _fold(ball.y + ball.vy * t, BALL_RADIUS, state.field_height - BALL_RADIUS)
+            cross_y, _ = _fold(ball.y + ball.vy * t, self.ball_radius, state.field_height - self.ball_radius)
             return line_x, _clamp(cross_y, gy - half, gy + half)
 
         # Otherwise stand on the line from goal centre to ball, covering the near post
         ux, uy = _norm(ball.x - gx, ball.y - gy)
         if ux * self.forward <= 0.05:  # Ball level with the goal line
             ux, uy = self.forward * 0.05, math.copysign(1.0, uy or 1.0)
-        dist = min(45.0, math.hypot(ball.x - gx, ball.y - gy) * 0.4)
+        dist = min(0.375 * state.goal_height, math.hypot(ball.x - gx, ball.y - gy) * 0.4)
         tx = gx + ux * dist
         ty = gy + uy * dist
         if (tx - line_x) * self.forward < 0:
@@ -451,7 +508,7 @@ class DefenderAgent(PlayerAgent):
         ball = state.ball
         gx, gy = self.own_goal(state)
         ball_depth = self.depth(state, ball.x)
-        near = math.hypot(ball.x - me.x, ball.y - me.y) < 90
+        near = math.hypot(ball.x - me.x, ball.y - me.y) < 3 * self.contact_dist
 
         if ball_depth < state.field_width * 0.55 and (near or self.first_to_ball(state, me, margin=10)):
             return self.attack(state, me)
@@ -459,9 +516,10 @@ class DefenderAgent(PlayerAgent):
         # Hold a spot on the ball-goal line, inside our own half
         tx = gx + (ball.x - gx) * 0.4
         ty = gy + (ball.y - gy) * 0.4
-        d = _clamp(self.depth(state, tx), 120.0, state.field_width * 0.42)
+        d = _clamp(self.depth(state, tx), state.field_width * 0.12, state.field_width * 0.42)
         tx = self.x_at_depth(state, d)
-        ty = _clamp(ty, gy - 170, gy + 170)
+        reach_y = state.field_height * 0.28
+        ty = _clamp(ty, gy - reach_y, gy + reach_y)
         ax, ay = self.steer(state, me, tx, ty)
         return self.opportunistic_kick(state, me, ax, ay)
 
@@ -469,21 +527,22 @@ class DefenderAgent(PlayerAgent):
 class InterceptorAgent(PlayerAgent):
     """Reads the ball's path: cuts it off goal-side when opponents get there first, else attacks."""
 
-    def __init__(self, team_id: int, player_id: int, max_acceleration: float = MAX_ACCELERATION,
-                 kick_range: float = KICK_RANGE, prediction_ticks: int = 60):
+    def __init__(self, team_id: int, player_id: int, max_acceleration: Optional[float] = None,
+                 kick_range: Optional[float] = None, prediction_ticks: int = 60):
         super().__init__(team_id, player_id, max_acceleration, kick_range)
         self.prediction_ticks = prediction_ticks
 
     def get_action(self, state: 'GameState') -> Action:
         me = self.get_my_player(state)
         ball = state.ball
-        if (math.hypot(ball.x - me.x, ball.y - me.y) > 70
+        cover = 2.5 * self.contact_dist
+        if (math.hypot(ball.x - me.x, ball.y - me.y) > cover
                 and self.opponents_first(state, me, margin=10)):
             # Block the lane between the ball and our goal
             bx, by, _, _, _ = self.intercept(state, me, self.prediction_ticks)
             gx, gy = self.own_goal(state)
             ux, uy = _norm(gx - bx, gy - by)
-            ax, ay = self.steer(state, me, bx + ux * 70, by + uy * 70)
+            ax, ay = self.steer(state, me, bx + ux * cover, by + uy * cover)
             return self.opportunistic_kick(state, me, ax, ay)
         return self.attack(state, me, horizon=self.prediction_ticks)
 
@@ -497,17 +556,17 @@ class MidfielderAgent(PlayerAgent):
         w, h = state.field_width, state.field_height
         ball_depth = self.depth(state, ball.x)
         in_zone = w * 0.25 <= ball_depth <= w * 0.75
-        near = math.hypot(ball.x - me.x, ball.y - me.y) < 150
+        near = math.hypot(ball.x - me.x, ball.y - me.y) < w * 0.15
 
         if self.first_to_ball(state, me, margin=10) or (in_zone and near):
             return self.attack(state, me)
 
         # Support: drop back when defending, push up for rebounds when attacking
         if ball_depth < w * 0.5:
-            d = _clamp(ball_depth + 120, w * 0.3, w * 0.5)
+            d = _clamp(ball_depth + w * 0.12, w * 0.3, w * 0.5)
             ty = h / 2 + (ball.y - h / 2) * 0.5
         else:
-            d = _clamp(ball_depth - 150, w * 0.45, w * 0.65)
+            d = _clamp(ball_depth - w * 0.15, w * 0.45, w * 0.65)
             ty = h / 2 - (ball.y - h / 2) * 0.5
         ax, ay = self.steer(state, me, self.x_at_depth(state, d), ty)
         return self.opportunistic_kick(state, me, ax, ay)
@@ -518,11 +577,7 @@ class AggressorAgent(PlayerAgent):
 
     kick_threshold = 0.0
     approach_cone = math.radians(50)
-    orbit_radius = 40.0
-
-    def __init__(self, team_id: int, player_id: int, max_acceleration: float = MAX_ACCELERATION,
-                 kick_range: float = KICK_RANGE):
-        super().__init__(team_id, player_id, max_acceleration, kick_range)
+    orbit_gap = 0.33
 
     def get_action(self, state: 'GameState') -> Action:
         return self.attack(state, self.get_my_player(state))
@@ -533,8 +588,8 @@ class WingerAgent(PlayerAgent):
 
     kick_threshold = 0.2
 
-    def __init__(self, team_id: int, player_id: int, max_acceleration: float = MAX_ACCELERATION,
-                 kick_range: float = KICK_RANGE, preferred_y: float | None = None):
+    def __init__(self, team_id: int, player_id: int, max_acceleration: Optional[float] = None,
+                 kick_range: Optional[float] = None, preferred_y: float | None = None):
         super().__init__(team_id, player_id, max_acceleration, kick_range)
         self.preferred_y = preferred_y  # Top or bottom of field
 
@@ -547,11 +602,11 @@ class WingerAgent(PlayerAgent):
         else:
             flank_y = h * (0.2 if self.player_id % 2 == 0 else 0.8)
 
-        near = math.hypot(ball.x - me.x, ball.y - me.y) < 150
+        near = math.hypot(ball.x - me.x, ball.y - me.y) < w * 0.15
         if near or self.first_to_ball(state, me, margin=5):
             return self.attack(state, me)
 
-        d = _clamp(self.depth(state, ball.x) + 100, w * 0.3, w * 0.8)
+        d = _clamp(self.depth(state, ball.x) + w * 0.1, w * 0.3, w * 0.8)
         ax, ay = self.steer(state, me, self.x_at_depth(state, d), flank_y)
         return self.opportunistic_kick(state, me, ax, ay)
 

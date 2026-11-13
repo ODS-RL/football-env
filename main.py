@@ -15,6 +15,7 @@ import sys
 from typing import List, Optional
 
 from game.config import GameConfig
+from game.environment import add_env_seed_argument, apply_env_seed
 from game.engine import Game
 from agents.base import BaseAgent
 from agents.random_agent import AGENT_CLASSES
@@ -274,6 +275,7 @@ Examples:
         type=int,
         help="Random seed for a reproducible game (agent picks, kickoff, agent noise)",
     )
+    add_env_seed_argument(parser)
     parser.add_argument(
         "--keyboard",
         action="store_true",
@@ -309,6 +311,7 @@ Examples:
         win_score=args.win_score,
         seed=args.seed,
     )
+    config = apply_env_seed(config, args.env_seed)
 
     # Create agents
     try:

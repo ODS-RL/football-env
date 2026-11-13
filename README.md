@@ -41,6 +41,7 @@ python main.py --agents tactical            # Use tactical preset
 python main.py --agents goalie,striker      # Specify each player's agent
 python main.py --agents striker             # Every player is a striker
 python main.py --no-viz --seed 42           # Reproducible game
+python main.py --env-seed random            # Random physics and geometry (seed is printed)
 ```
 
 ## Command Line Options
@@ -56,8 +57,37 @@ python main.py --no-viz --seed 42           # Reproducible game
 | `--log PATH` | Save game log to PATH | - |
 | `--save-log` | Save game log to a timestamped file | False |
 | `--seed N` | Random seed for a reproducible game | random |
+| `--env-seed N\|random` | Roll random physics and geometry from seed N | standard physics |
 | `--keyboard` | Control team 0 with WASD/Space, Tab to switch player | False |
 | `--scale F` | Display scale factor | 1.0 |
+
+## Physics
+
+The default physics are Haxball's, scaled to a 1000x460 field: players have
+heavy inertia (friction 0.96, about 25 ticks to reach top speed), and a kick is
+only about twice as fast as a running player, so the ball rolls far but long
+shots die before reaching the goal. All values live in `GameConfig`
+(`game/config.py`).
+
+### Randomized environments
+
+For competitions, `--env-seed` re-rolls physics and geometry: field size,
+goal size, radii, frictions, acceleration, kick power and range, cooldown,
+masses and bounciness. Rules (team size, ticks, win score) stay fixed. The same
+seed always gives the same environment, and `random` picks a fresh one and
+prints it:
+
+```bash
+python main.py --env-seed random
+python tournament.py --players 2 --preset common --env-seed 1234 --output results.json
+python server.py --players 2 --env-seed 1234
+```
+
+A tournament plays every match under one rolled environment and saves it in
+the results JSON. Agents get the match's parameters as `self.config` (a
+`GameConfig`; network clients get them from the server), so an agent that
+reads its constants from there keeps working in any environment, while one
+with hardcoded constants does not.
 
 ## Agents
 
@@ -113,7 +143,7 @@ All agents except RandomAgent share a common base (`PlayerAgent`) that:
 ### WingerAgent
 - **Behavior**: Flank player that stays wide
 - **Use case**: Wing attack
-- **Strategy**: Holds the top or bottom flank (20% or 80% of field height, by player_id) ahead of the ball and attacks when the ball comes within 150 units or it is the closest teammate
+- **Strategy**: Holds the top or bottom flank (20% or 80% of field height, by player_id) ahead of the ball and attacks when the ball comes within 15% of the field width or it is the closest teammate
 
 ## Tactics (Strategy Presets)
 

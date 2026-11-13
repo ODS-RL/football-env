@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from game.config import GameConfig
     from game.state import GameState
 
 
@@ -62,6 +63,21 @@ class BaseAgent(ABC):
         # Per-agent RNG. The game reseeds it from its own seed so runs are
         # reproducible even though agents execute on parallel threads.
         self.rng = random.Random()
+        # Imported here: game.engine imports this module, so a top-level
+        # import of the game package from here would be circular
+        from game.config import GameConfig
+        self.set_config(GameConfig())
+
+    def set_config(self, config: 'GameConfig') -> None:
+        """Receive the match's physics, geometry and rules.
+
+        The game calls this with its own config before the match starts;
+        until then agents see the defaults. Physics can be randomized per
+        competition (--env-seed), so read constants from ``self.config``
+        rather than hardcoding them. Override to precompute derived values
+        (call super).
+        """
+        self.config = config
 
     @abstractmethod
     def get_action(self, state: 'GameState') -> Action:
